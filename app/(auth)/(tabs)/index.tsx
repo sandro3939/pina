@@ -156,7 +156,7 @@ export default function PlannerScreen() {
               <View
                 key={i}
                 className={cn(
-                  'rounded-xl border overflow-hidden',
+                  'rounded-xl border',
                   isCurrentDay ? 'border-primary bg-primary/5' : 'border-border bg-card',
                 )}
               >
@@ -174,7 +174,7 @@ export default function PlannerScreen() {
                     {date.getDate()} {MONTHS[date.getMonth()]}
                   </Text>
                   {isCurrentDay && (
-                    <Badge className="h-4 px-1.5">
+                    <Badge className="px-1.5">
                       <Text className="text-[10px]">oggi</Text>
                     </Badge>
                   )}
