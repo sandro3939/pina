@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Pina – Light Mode ──────────────────────────────────── */
+
+    /* Backgrounds */
+    --background: 36 25% 98%;          /* warm off-white */
+    --foreground: 24 10% 10%;          /* warm near-black — slightly deeper */
+
+    --card: 0 0% 100%;
+    --card-foreground: 24 10% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 24 10% 10%;
+
+    /* Primary – Sage Green */
+    --primary: 152 52% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary – light green tint */
+    --secondary: 152 38% 92%;
+    --secondary-foreground: 152 44% 26%;
+
+    /* Muted – warm neutral grey (lighter foreground = better hierarchy) */
+    --muted: 36 14% 94%;
+    --muted-foreground: 36 7% 50%;     /* was 46% — less muddy, more airy */
+
+    /* Accent */
+    --accent: 152 28% 91%;
+    --accent-foreground: 24 10% 10%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Surfaces (sharper borders = more visual definition) */
+    --border: 36 14% 86%;              /* was 89% — more visible */
+    --input: 36 14% 86%;
+    --ring: 152 52% 35%;
+
+    /* Base radius */
+    --radius: 0.75rem;
+  }
+
+  .dark:root {
+    /* ── Pina – Dark Mode ──────────────────────────────────── */
+
+    --background: 20 8% 8%;            /* slightly deeper */
+    --foreground: 36 8% 95%;
+
+    --card: 20 8% 11%;                 /* slightly deeper */
+    --card-foreground: 36 8% 95%;
+
+    --popover: 20 8% 14%;
+    --popover-foreground: 36 8% 95%;
+
+    --primary: 152 58% 44%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 20 8% 18%;
+    --secondary-foreground: 152 42% 72%;
+
+    --muted: 20 8% 15%;
+    --muted-foreground: 20 5% 52%;     /* slightly lighter */
+
+    --accent: 20 8% 18%;
+    --accent-foreground: 36 8% 95%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 20 8% 22%;               /* was 21% — slightly more visible */
+    --input: 20 8% 22%;
+    --ring: 152 58% 44%;
+  }
+}

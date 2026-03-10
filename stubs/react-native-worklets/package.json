@@ -1,0 +1,6 @@
+{
+  "name": "react-native-worklets",
+  "version": "0.5.2",
+  "description": "No-op stub for react-native-worklets (not using reanimated 4)",
+  "main": "index.js"
+}
