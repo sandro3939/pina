@@ -53,6 +53,7 @@ import {
   ScanLine,
   Receipt,
   CalendarPlus,
+  Image,
 } from 'lucide-react-native';
 
 const interopConfig = {
@@ -113,6 +114,7 @@ const icons = [
   ScanLine,
   Receipt,
   CalendarPlus,
+  Image,
 ];
 
 for (const icon of icons) {

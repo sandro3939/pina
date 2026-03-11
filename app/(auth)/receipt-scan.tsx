@@ -1,304 +1,281 @@
 import { useState } from 'react';
-import { View, ScrollView, ActivityIndicator } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { getISOWeek, getISOWeekYear } from 'date-fns';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Camera, ScanLine, CheckCircle2, Check } from 'lucide-react-native';
-import { usePantryStore } from '@/lib/stores/pantry-store';
-import { useShoppingStore } from '@/lib/stores/shopping-store';
-import { useFavoritesStore } from '@/lib/stores/favorites-store';
+import { ArrowLeft, Camera, Image, ScanLine, CheckCircle2 } from 'lucide-react-native';
+import {
+  receiptControllerGetUploadUrl,
+  useReceiptControllerProcess,
+} from '@/lib/api/endpoints/receipt/receipt';
+import type { ProcessReceiptResponseDto } from '@/lib/api/model/receiptDto';
+import { useQueryClient } from '@tanstack/react-query';
+import { getPantryControllerGetAllQueryKey } from '@/lib/api/endpoints/pantry/pantry';
+import { getShoppingControllerGetQueryKey } from '@/lib/api/endpoints/shopping/shopping';
 
-// ── Dati mock "estratti dall'AI dallo scontrino" ─────────────────────────────
-interface RecognizedItem {
-  id: string;
-  name: string;
-  category: string;
-  shopItemId?: string;   // id in shopping store (se presente)
-  pantryItemId?: string; // id in pantry store (se già esiste)
+function getCurrentWeekKey(): string {
+  const today = new Date();
+  const day = today.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + diff);
+  monday.setHours(0, 0, 0, 0);
+  const year = getISOWeekYear(monday);
+  const week = getISOWeek(monday);
+  return `${year}-W${String(week).padStart(2, '0')}`;
 }
 
-const MOCK_RECOGNIZED: RecognizedItem[] = [
-  { id: 'r1',  name: 'Parmigiano',            category: 'Latticini',        shopItemId: 's10', pantryItemId: 'p11' },
-  { id: 'r2',  name: 'Mozzarella fior di latte', category: 'Latticini',     shopItemId: 's11' },
-  { id: 'r3',  name: 'Feta',                  category: 'Latticini',        shopItemId: 's12' },
-  { id: 'r4',  name: 'Burro',                 category: 'Latticini',        shopItemId: 's13', pantryItemId: 'p13' },
-  { id: 'r5',  name: 'Petto di pollo',         category: 'Carne e Pesce',   shopItemId: 's8'  },
-  { id: 'r6',  name: 'Riso Arborio',           category: 'Cereali e Legumi', shopItemId: 's15', pantryItemId: 'p7' },
-  { id: 'r7',  name: 'Pomodori',               category: 'Verdure',          shopItemId: 's1'  },
-  { id: 'r8',  name: 'Funghi misti',           category: 'Verdure',          shopItemId: 's2'  },
-  { id: 'r9',  name: 'Limoni',                 category: 'Verdure',          shopItemId: 's3'  },
-  { id: 'r10', name: 'Passata di pomodoro',    category: 'Conserve',         shopItemId: 's17', pantryItemId: 'p15' },
-  { id: 'r11', name: 'Lenticchie',             category: 'Cereali e Legumi', pantryItemId: 'p10' },
-  { id: 'r12', name: 'Latte',                  category: 'Latticini',        pantryItemId: 'p14' },
-];
-
-type ScreenState = 'camera' | 'loading' | 'review' | 'success';
+type ScreenState = 'camera' | 'loading' | 'success' | 'error';
 
 const LOADING_STEPS = [
-  'Rilevamento scontrino...',
-  'Lettura articoli...',
-  'Normalizzazione nomi...',
-  'Abbinamento dispensa...',
+  'Caricamento immagine...',
+  'Analisi AI in corso...',
+  'Riconoscimento articoli...',
+  'Aggiornamento dispensa...',
 ];
 
 export default function ReceiptScanScreen() {
   const router = useRouter();
-  const bulkSetHasIt = usePantryStore((s) => s.bulkSetHasIt);
-  const addPantryItems = usePantryStore((s) => s.addItems);
-  const bulkCheck = useShoppingStore((s) => s.bulkCheck);
-  const bulkCheckFavorites = useFavoritesStore((s) => s.bulkCheckByName);
+  const queryClient = useQueryClient();
+  const weekKey = getCurrentWeekKey();
 
   const [state, setState] = useState<ScreenState>('camera');
-  const [loadingMsg, setLoadingMsg] = useState(LOADING_STEPS[0]);
-  const [selected, setSelected] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(MOCK_RECOGNIZED.map((i) => [i.id, true])),
-  );
-  const [result, setResult] = useState({ pantryUpdated: 0, shoppingChecked: 0 });
+  const [loadingStep, setLoadingStep] = useState(0);
+  const [result, setResult] = useState<ProcessReceiptResponseDto | null>(null);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const toggleItem = (id: string) =>
-    setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
+  const processReceipt = useReceiptControllerProcess({
+    mutation: {
+      onSuccess: (data) => {
+        // Invalidate pantry and shopping caches
+        queryClient.invalidateQueries({ queryKey: getPantryControllerGetAllQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getShoppingControllerGetQueryKey(weekKey) });
+        setResult(data);
+        setState('success');
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.message || 'Errore durante l\'elaborazione';
+        setErrorMsg(typeof msg === 'string' ? msg : 'Errore sconosciuto');
+        setState('error');
+      },
+    },
+  });
 
-  const handleCapture = async () => {
-    setState('loading');
-    let step = 0;
-    const interval = setInterval(() => {
-      step = (step + 1) % LOADING_STEPS.length;
-      setLoadingMsg(LOADING_STEPS[step]);
-    }, 600);
-    await new Promise((r) => setTimeout(r, 2500));
-    clearInterval(interval);
-    setState('review');
+  const handlePickAndProcess = async (useCamera: boolean) => {
+    try {
+      // 1. Pick image
+      const pickerResult = useCamera
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images'],
+            quality: 0.8,
+            allowsEditing: false,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            quality: 0.8,
+            allowsEditing: false,
+          });
+
+      if (pickerResult.canceled || !pickerResult.assets[0]) return;
+
+      const imageUri = pickerResult.assets[0].uri;
+
+      setState('loading');
+      setLoadingStep(0);
+
+      // 2. Get presigned upload URL
+      const stepTimer = setInterval(() => {
+        setLoadingStep((s) => Math.min(s + 1, LOADING_STEPS.length - 1));
+      }, 1500);
+
+      try {
+        const { uploadUrl, s3Key } = await receiptControllerGetUploadUrl();
+
+        // 3. Upload image to S3
+        const imageBlob = await (await fetch(imageUri)).blob();
+        await fetch(uploadUrl, {
+          method: 'PUT',
+          body: imageBlob,
+          headers: { 'Content-Type': 'image/jpeg' },
+        });
+
+        clearInterval(stepTimer);
+        setLoadingStep(3);
+
+        // 4. Process receipt
+        processReceipt.mutate({ s3Key, weekKey });
+      } catch (err) {
+        clearInterval(stepTimer);
+        throw err;
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Errore durante il caricamento';
+      setErrorMsg(msg);
+      setState('error');
+    }
   };
-
-  const handleConfirm = () => {
-    const confirmed = MOCK_RECOGNIZED.filter((i) => selected[i.id]);
-
-    // 1. Aggiorna pantry — item già esistenti
-    const existingNames = confirmed
-      .filter((i) => i.pantryItemId)
-      .map((i) => i.name);
-    if (existingNames.length) bulkSetHasIt(existingNames, true);
-
-    // 2. Aggiungi nuovi item alla pantry
-    const newItems = confirmed
-      .filter((i) => !i.pantryItemId)
-      .map((i) => ({ name: i.name, category: i.category }));
-    if (newItems.length) addPantryItems(newItems);
-
-    // 3. Segna come acquistati nella lista spesa
-    const shopIds = confirmed
-      .filter((i) => i.shopItemId)
-      .map((i) => i.shopItemId as string);
-    if (shopIds.length) bulkCheck(shopIds);
-
-    // 4. Segna come acquistati i preferiti in cart che matchano i nomi riconosciuti
-    const recognizedNames = confirmed.map((i) => i.name);
-    bulkCheckFavorites(recognizedNames);
-
-    setResult({ pantryUpdated: confirmed.length, shoppingChecked: shopIds.length });
-    setState('success');
-  };
-
-  const selectedCount = Object.values(selected).filter(Boolean).length;
 
   return (
     <SafeAreaView className="flex-1 bg-background">
 
-      {/* ── Camera state ──────────────────────────────────────── */}
+      {/* ── Camera / Pick state ────────────────────────────────── */}
       {state === 'camera' && (
         <View className="flex-1">
-          {/* Header trasparente su sfondo scuro */}
-          <View className="absolute top-0 left-0 right-0 z-10 flex-row items-center px-4 pt-4 pb-3">
+          <View className="flex-row items-center px-4 pt-4 pb-3">
             <Button size="icon" variant="ghost" onPress={() => router.back()}>
               <ArrowLeft className="text-foreground" size={20} />
             </Button>
+            <Text variant="h3" className="ml-3">Scansiona scontrino</Text>
           </View>
 
-          {/* Finto viewport camera */}
-          <View className="flex-1 bg-zinc-900 items-center justify-center gap-8">
-            {/* Frame guida scontrino */}
-            <View className="items-center gap-4">
-              <View className="w-64 h-80 rounded-2xl border-2 border-white/60 items-center justify-center gap-3">
-                <ScanLine className="text-white/60" size={32} />
-                <Text className="text-white/60 text-sm text-center px-4">
-                  Inquadra lo scontrino
-                </Text>
-              </View>
-              <Text className="text-white/40 text-xs text-center">
-                Tieni il telefono fermo e assicurati{'\n'}che il testo sia leggibile
+          <Separator />
+
+          <View className="flex-1 items-center justify-center px-8 gap-8">
+            {/* Illustration */}
+            <View className="w-32 h-32 rounded-3xl bg-primary/10 items-center justify-center">
+              <ScanLine className="text-primary" size={56} />
+            </View>
+
+            <View className="items-center gap-2">
+              <Text className="text-lg font-semibold text-center">
+                Fotografa lo scontrino
+              </Text>
+              <Text className="text-sm text-muted-foreground text-center leading-relaxed">
+                L'AI riconoscerà gli articoli acquistati e aggiornerà automaticamente la tua dispensa
               </Text>
             </View>
 
-            {/* Bottone cattura */}
-            <Button
-              onPress={handleCapture}
-              className="w-16 h-16 rounded-full bg-white"
-              variant="ghost"
-            >
-              <Camera className="text-zinc-900" size={28} />
-            </Button>
+            <View className="w-full gap-3">
+              <Button onPress={() => handlePickAndProcess(true)} className="gap-3">
+                <Camera className="text-primary-foreground" size={18} />
+                <Text>Scatta una foto</Text>
+              </Button>
+              <Button variant="outline" onPress={() => handlePickAndProcess(false)} className="gap-3">
+                <Image className="text-foreground" size={18} />
+                <Text>Scegli dalla galleria</Text>
+              </Button>
+            </View>
+
+            <Text className="text-xs text-muted-foreground text-center">
+              Assicurati che il testo dello scontrino sia leggibile
+            </Text>
           </View>
         </View>
       )}
 
       {/* ── Loading state ─────────────────────────────────────── */}
       {state === 'loading' && (
-        <View className="flex-1 items-center justify-center gap-6 px-8">
+        <View className="flex-1 items-center justify-center px-8 gap-8">
           <View className="w-24 h-24 rounded-3xl bg-primary/10 items-center justify-center">
             <ActivityIndicator size="large" color="hsl(152, 52%, 35%)" />
           </View>
-          <View className="items-center gap-2">
-            <Text className="text-base font-semibold">{loadingMsg}</Text>
-            <Text className="text-sm text-muted-foreground text-center">
-              L'AI sta analizzando lo scontrino
-            </Text>
-          </View>
-        </View>
-      )}
 
-      {/* ── Review state ──────────────────────────────────────── */}
-      {state === 'review' && (
-        <View className="flex-1">
-          {/* Header */}
-          <View className="flex-row items-center gap-3 px-4 pt-4 pb-3">
-            <Button size="icon" variant="ghost" onPress={() => router.back()}>
-              <ArrowLeft className="text-foreground" size={20} />
-            </Button>
-            <View className="flex-1">
-              <Text variant="h3">Articoli trovati</Text>
-              <Text variant="muted">{selectedCount} di {MOCK_RECOGNIZED.length} selezionati</Text>
+          <View className="items-center gap-3 w-full">
+            <Text className="text-base font-semibold">{LOADING_STEPS[loadingStep]}</Text>
+            <View className="flex-row gap-2">
+              {LOADING_STEPS.map((_, i) => (
+                <View
+                  key={i}
+                  className={i <= loadingStep ? 'w-2 h-2 rounded-full bg-primary' : 'w-2 h-2 rounded-full bg-muted'}
+                />
+              ))}
             </View>
-          </View>
-
-          <Separator />
-
-          <ScrollView contentContainerClassName="px-4 py-4 gap-3" showsVerticalScrollIndicator={false}>
-            {/* Info banner */}
-            <View className="bg-primary/10 rounded-xl px-4 py-3 border border-primary/20">
-              <Text className="text-sm text-primary font-medium">
-                L'AI ha riconosciuto {MOCK_RECOGNIZED.length} articoli dallo scontrino
-              </Text>
-              <Text className="text-xs text-muted-foreground mt-0.5">
-                Deseleziona gli articoli errati prima di confermare
-              </Text>
-            </View>
-
-            {/* Items list */}
-            <Card>
-              <CardContent className="pt-3 pb-1">
-                {MOCK_RECOGNIZED.map((item, idx) => {
-                  const isSelected = selected[item.id];
-                  const inShop = !!item.shopItemId;
-                  const inPantry = !!item.pantryItemId;
-
-                  return (
-                    <View key={item.id}>
-                      <Button
-                        variant="ghost"
-                        onPress={() => toggleItem(item.id)}
-                        className="flex-row items-center justify-start gap-3 px-0 h-auto py-3"
-                      >
-                        {/* Checkbox */}
-                        <View
-                          className={
-                            isSelected
-                              ? 'w-5 h-5 rounded-md bg-primary items-center justify-center'
-                              : 'w-5 h-5 rounded-md border-2 border-border'
-                          }
-                        >
-                          {isSelected && <Check className="text-primary-foreground" size={12} />}
-                        </View>
-
-                        {/* Nome */}
-                        <Text className="flex-1 text-sm">{item.name}</Text>
-
-                        {/* Badges */}
-                        <View className="flex-row gap-1">
-                          {inShop && (
-                            <Badge variant="secondary">
-                              <Text className="text-[10px]">spesa</Text>
-                            </Badge>
-                          )}
-                          {inPantry && (
-                            <Badge variant="outline">
-                              <Text className="text-[10px]">dispensa</Text>
-                            </Badge>
-                          )}
-                          {!inShop && !inPantry && (
-                            <Badge>
-                              <Text className="text-[10px]">nuovo</Text>
-                            </Badge>
-                          )}
-                        </View>
-                      </Button>
-                      {idx < MOCK_RECOGNIZED.length - 1 && <Separator />}
-                    </View>
-                  );
-                })}
-              </CardContent>
-            </Card>
-
-            {/* Legend */}
-            <View className="flex-row gap-3 px-1">
-              <View className="flex-row items-center gap-1.5">
-                <Badge variant="secondary"><Text className="text-[10px]">spesa</Text></Badge>
-                <Text className="text-xs text-muted-foreground">rimosso dalla lista</Text>
-              </View>
-              <View className="flex-row items-center gap-1.5">
-                <Badge variant="outline"><Text className="text-[10px]">dispensa</Text></Badge>
-                <Text className="text-xs text-muted-foreground">aggiornato</Text>
-              </View>
-              <View className="flex-row items-center gap-1.5">
-                <Badge><Text className="text-[10px]">nuovo</Text></Badge>
-                <Text className="text-xs text-muted-foreground">aggiunto</Text>
-              </View>
-            </View>
-          </ScrollView>
-
-          {/* Sticky confirm */}
-          <View className="px-4 pb-6 pt-3 border-t border-border bg-background">
-            <Button onPress={handleConfirm} disabled={selectedCount === 0}>
-              <Text>Conferma e aggiorna ({selectedCount})</Text>
-            </Button>
           </View>
         </View>
       )}
 
       {/* ── Success state ─────────────────────────────────────── */}
-      {state === 'success' && (
-        <View className="flex-1 items-center justify-center px-8 gap-6">
-          <View className="w-20 h-20 rounded-full bg-primary/15 items-center justify-center">
-            <CheckCircle2 className="text-primary" size={40} />
-          </View>
-
-          <View className="items-center gap-2">
-            <Text className="text-xl font-bold text-center">Dispensa aggiornata!</Text>
-            <Text className="text-sm text-muted-foreground text-center leading-relaxed">
-              L'AI ha elaborato lo scontrino e aggiornato i tuoi dati
-            </Text>
-          </View>
-
-          {/* Stats */}
-          <View className="w-full gap-3">
-            <View className="flex-row gap-3">
-              <View className="flex-1 bg-primary/10 rounded-xl p-4 items-center gap-1 border border-primary/20">
-                <Text className="text-2xl font-bold text-primary">{result.pantryUpdated}</Text>
-                <Text className="text-xs text-muted-foreground text-center">articoli in dispensa</Text>
-              </View>
-              <View className="flex-1 bg-muted rounded-xl p-4 items-center gap-1">
-                <Text className="text-2xl font-bold">{result.shoppingChecked}</Text>
-                <Text className="text-xs text-muted-foreground text-center">rimossi dalla spesa</Text>
-              </View>
+      {state === 'success' && result && (
+        <View className="flex-1">
+          <View className="flex-row items-center px-4 pt-4 pb-3">
+            <View className="w-10 h-10 rounded-full bg-primary/15 items-center justify-center mr-3">
+              <CheckCircle2 className="text-primary" size={22} />
+            </View>
+            <View>
+              <Text variant="h3">Scontrino elaborato!</Text>
+              <Text variant="muted">{result.items.length} articoli riconosciuti</Text>
             </View>
           </View>
 
-          <Button onPress={() => router.back()} className="w-full">
-            <Text>Torna alla dispensa</Text>
-          </Button>
+          <Separator />
+
+          <ScrollView contentContainerClassName="px-4 py-4 gap-4" showsVerticalScrollIndicator={false}>
+            {/* Stats */}
+            <View className="flex-row gap-3">
+              <View className="flex-1 bg-primary/10 rounded-xl p-4 items-center gap-1 border border-primary/20">
+                <Text className="text-2xl font-bold text-primary">{result.addedToPantry}</Text>
+                <Text className="text-xs text-muted-foreground text-center">aggiunti in dispensa</Text>
+              </View>
+              {result.addedToShopping !== undefined && (
+                <View className="flex-1 bg-muted rounded-xl p-4 items-center gap-1">
+                  <Text className="text-2xl font-bold">{result.addedToShopping}</Text>
+                  <Text className="text-xs text-muted-foreground text-center">aggiunti alla spesa</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Items list */}
+            {result.items.length > 0 && (
+              <View>
+                <Text className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1 mb-2">
+                  Articoli trovati
+                </Text>
+                <Card>
+                  <CardContent className="pt-3 pb-1">
+                    {result.items.map((item, idx) => (
+                      <View key={idx}>
+                        <View className="flex-row items-center justify-between py-3">
+                          <Text className="flex-1 text-sm">{item.name}</Text>
+                          {item.quantity ? (
+                            <Badge variant="secondary">
+                              <Text className="text-[10px]">{item.quantity}</Text>
+                            </Badge>
+                          ) : null}
+                        </View>
+                        {idx < result.items.length - 1 && <Separator />}
+                      </View>
+                    ))}
+                  </CardContent>
+                </Card>
+              </View>
+            )}
+          </ScrollView>
+
+          <View className="px-4 pb-6 pt-3 border-t border-border bg-background gap-2">
+            <Button onPress={() => router.back()}>
+              <Text>Torna alla dispensa</Text>
+            </Button>
+            <Button variant="outline" onPress={() => setState('camera')}>
+              <Text>Scansiona un altro scontrino</Text>
+            </Button>
+          </View>
+        </View>
+      )}
+
+      {/* ── Error state ───────────────────────────────────────── */}
+      {state === 'error' && (
+        <View className="flex-1 items-center justify-center px-8 gap-6">
+          <View className="w-20 h-20 rounded-full bg-destructive/15 items-center justify-center">
+            <ScanLine className="text-destructive" size={36} />
+          </View>
+          <View className="items-center gap-2">
+            <Text className="text-lg font-semibold text-center">Errore elaborazione</Text>
+            <Text className="text-sm text-muted-foreground text-center">{errorMsg}</Text>
+          </View>
+          <View className="w-full gap-3">
+            <Button onPress={() => setState('camera')}>
+              <Text>Riprova</Text>
+            </Button>
+            <Button variant="outline" onPress={() => router.back()}>
+              <Text>Annulla</Text>
+            </Button>
+          </View>
         </View>
       )}
 
