@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,8 +11,10 @@ import { Label } from '@/components/ui/label';
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  useRecipesControllerCreate,
+  useRecipesControllerFindOne,
+  useRecipesControllerUpdate,
   getRecipesControllerFindAllQueryKey,
+  getRecipesControllerFindOneQueryKey,
 } from '@/lib/api/endpoints/recipes/recipes';
 
 const AVAILABLE_TAGS = ['veloce', 'vegetariano', 'vegano', 'proteico', 'leggero', 'comfort'];
@@ -22,26 +24,14 @@ interface Ingredient {
   amount: string;
 }
 
-export default function ManualRecipeScreen() {
+export default function EditRecipeScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const createRecipe = useRecipesControllerCreate({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getRecipesControllerFindAllQueryKey() });
-        router.back();
-      },
-      onError: (err: any) => {
-        const msg =
-          err?.response?.data?.message ||
-          err?.message ||
-          'Errore durante il salvataggio';
-        setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
-      },
-    },
-  });
+  const { data: recipe, isLoading } = useRecipesControllerFindOne(id ?? '');
 
+  const [initialized, setInitialized] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [timeMinutes, setTimeMinutes] = useState('');
@@ -50,6 +40,36 @@ export default function ManualRecipeScreen() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([{ name: '', amount: '' }]);
   const [steps, setSteps] = useState<string[]>(['']);
   const [error, setError] = useState('');
+
+  // Pre-popola i campi una volta che la ricetta è caricata
+  if (recipe && !initialized) {
+    setName(recipe.name);
+    setDescription(recipe.description ?? '');
+    setTimeMinutes(String(recipe.timeMinutes));
+    setServings(String(recipe.servings));
+    setSelectedTags(recipe.tags);
+    setIngredients(
+      recipe.ingredients.length > 0
+        ? recipe.ingredients.map((i) => ({ name: i.name, amount: i.amount }))
+        : [{ name: '', amount: '' }],
+    );
+    setSteps(recipe.steps.length > 0 ? recipe.steps : ['']);
+    setInitialized(true);
+  }
+
+  const updateRecipe = useRecipesControllerUpdate({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getRecipesControllerFindAllQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getRecipesControllerFindOneQueryKey(id ?? '') });
+        router.back();
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.message || 'Errore durante il salvataggio';
+        setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      },
+    },
+  });
 
   const toggleTag = (tag: string) =>
     setSelectedTags((prev) =>
@@ -72,19 +92,27 @@ export default function ManualRecipeScreen() {
       return;
     }
     setError('');
-    createRecipe.mutate({
+    updateRecipe.mutate({
+      recipeId: id ?? '',
       data: {
         name: name.trim(),
         description: description.trim() || undefined,
         tags: selectedTags,
         servings: parseInt(servings, 10) || 4,
         timeMinutes: parseInt(timeMinutes, 10) || 30,
-        rating: 0,
         ingredients: ingredients.filter((i) => i.name.trim()),
         steps: steps.filter((s) => s.trim()),
       },
     });
   };
+
+  if (isLoading || !initialized) {
+    return (
+      <SafeAreaView className="flex-1 bg-background items-center justify-center">
+        <ActivityIndicator />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -98,10 +126,10 @@ export default function ManualRecipeScreen() {
             <ArrowLeft className="text-foreground" size={20} />
           </Button>
           <View className="flex-1">
-            <Text variant="h3">Nuova ricetta</Text>
+            <Text variant="h3">Modifica ricetta</Text>
           </View>
-          <Button onPress={handleSave} disabled={createRecipe.isPending}>
-            <Text>{createRecipe.isPending ? 'Salvataggio...' : 'Salva'}</Text>
+          <Button onPress={handleSave} disabled={updateRecipe.isPending}>
+            <Text>{updateRecipe.isPending ? 'Salvataggio...' : 'Salva'}</Text>
           </Button>
         </View>
 
@@ -112,9 +140,7 @@ export default function ManualRecipeScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {error ? (
-            <Text className="text-destructive text-sm">{error}</Text>
-          ) : null}
+          {error ? <Text className="text-destructive text-sm">{error}</Text> : null}
 
           {/* Nome */}
           <View className="gap-1.5">
@@ -246,12 +272,7 @@ export default function ManualRecipeScreen() {
                     textAlignVertical="top"
                   />
                   {steps.length > 1 && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onPress={() => removeStep(i)}
-                      className="mt-1"
-                    >
+                    <Button size="icon" variant="ghost" onPress={() => removeStep(i)} className="mt-1">
                       <Trash2 className="text-muted-foreground" size={16} />
                     </Button>
                   )}
@@ -264,8 +285,8 @@ export default function ManualRecipeScreen() {
             </Button>
           </View>
 
-          <Button onPress={handleSave} disabled={createRecipe.isPending} className="mt-2">
-            <Text>{createRecipe.isPending ? 'Salvataggio...' : 'Salva ricetta'}</Text>
+          <Button onPress={handleSave} disabled={updateRecipe.isPending} className="mt-2">
+            <Text>{updateRecipe.isPending ? 'Salvataggio...' : 'Salva ricetta'}</Text>
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>

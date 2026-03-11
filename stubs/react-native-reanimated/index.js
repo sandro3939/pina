@@ -1,13 +1,55 @@
 // No-op stub — no native build required
+const React = require('react');
 const { View, Text, Image, ScrollView, FlatList } = require('react-native');
 
 const noop = () => {};
 const identity = (v) => v;
 const makeShared = (v) => ({ value: v });
 
+// Wraps a RN component and strips reanimated-specific props before rendering
+function makeAnimatedComponent(Component) {
+  function AnimatedStub({ entering, exiting, layout, animatedProps, ...rest }) {
+    return React.createElement(Component, rest);
+  }
+  AnimatedStub.displayName = `Animated(${Component.displayName || Component.name || 'Component'})`;
+  return AnimatedStub;
+}
+
+const AnimatedView = makeAnimatedComponent(View);
+const AnimatedText = makeAnimatedComponent(Text);
+const AnimatedImage = makeAnimatedComponent(Image);
+const AnimatedScrollView = makeAnimatedComponent(ScrollView);
+const AnimatedFlatList = makeAnimatedComponent(FlatList);
+
+function makeAnimationBuilder() {
+  const builder = {
+    duration: () => builder,
+    delay: () => builder,
+    springify: () => builder,
+    damping: () => builder,
+    stiffness: () => builder,
+    withInitialValues: () => builder,
+    easing: () => builder,
+    rotate: () => builder,
+    reduceMotion: () => builder,
+    build: () => noop,
+  };
+  return builder;
+}
+
+const AnimatedNamespace = {
+  View: AnimatedView,
+  Text: AnimatedText,
+  Image: AnimatedImage,
+  ScrollView: AnimatedScrollView,
+  FlatList: AnimatedFlatList,
+  createAnimatedComponent: makeAnimatedComponent,
+};
+
 module.exports = {
-  default: { View, Text, Image, ScrollView, FlatList, createAnimatedComponent: identity },
-  Animated: { View, Text, Image, ScrollView, FlatList, createAnimatedComponent: identity },
+  __esModule: true,
+  default: AnimatedNamespace,
+  Animated: AnimatedNamespace,
   useSharedValue: makeShared,
   useAnimatedStyle: (fn) => { try { return fn() ?? {}; } catch { return {}; } },
   useAnimatedProps: (fn) => { try { return fn() ?? {}; } catch { return {}; } },
@@ -39,8 +81,18 @@ module.exports = {
     out: identity,
     inOut: identity,
   },
-  createAnimatedComponent: identity,
+  createAnimatedComponent: makeAnimatedComponent,
   setUpTests: noop,
   enableLayoutAnimations: noop,
   ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },
+  // Entry/exit animation builders — chainable no-ops
+  FadeIn: makeAnimationBuilder(),
+  FadeOut: makeAnimationBuilder(),
+  FadeInUp: makeAnimationBuilder(),
+  FadeOutDown: makeAnimationBuilder(),
+  SlideInDown: makeAnimationBuilder(),
+  SlideOutDown: makeAnimationBuilder(),
+  ZoomIn: makeAnimationBuilder(),
+  ZoomOut: makeAnimationBuilder(),
+  Layout: makeAnimationBuilder(),
 };

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView } from 'react-native';
+import { View, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
@@ -8,18 +8,50 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Search, Camera } from 'lucide-react-native';
-import { usePantryStore } from '@/lib/stores/pantry-store';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  usePantryControllerGetAll,
+  getPantryControllerGetAllQueryKey,
+} from '@/lib/api/endpoints/pantry/pantry';
+import { usePantryControllerToggleStock } from '@/lib/api/endpoints/pantry/pantry';
 
 export default function PantryScreen() {
-  const { items, categories, toggle } = usePantryStore();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
 
-  const hasCount = items.filter((i) => i.hasIt).length;
+  const { data: items = [], isLoading } = usePantryControllerGetAll();
+
+  const toggleStock = usePantryControllerToggleStock({
+    mutation: {
+      onSuccess: (updated) => {
+        queryClient.setQueryData(
+          getPantryControllerGetAllQueryKey(),
+          (old: typeof items) =>
+            old.map((i) => (i.itemId === updated.itemId ? updated : i)),
+        );
+      },
+    },
+  });
+
+  const categories = [...new Set(items.map((i) => i.category))].sort();
+  const hasCount = items.filter((i) => i.inStock).length;
 
   const filtered = search.trim()
     ? items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
     : items;
+
+  const handleToggle = (itemId: string, currentInStock: boolean) => {
+    toggleStock.mutate({ itemId, data: { inStock: !currentInStock } });
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-background items-center justify-center">
+        <ActivityIndicator />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-background">
@@ -56,7 +88,11 @@ export default function PantryScreen() {
       <Separator />
 
       <ScrollView contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
-        {search.trim() ? (
+        {items.length === 0 ? (
+          <View className="items-center py-16">
+            <Text variant="muted">Nessun articolo in dispensa</Text>
+          </View>
+        ) : search.trim() ? (
           <View className="mx-4 mt-4 rounded-xl border border-border bg-card overflow-hidden">
             {filtered.length === 0 ? (
               <View className="items-center py-10">
@@ -64,10 +100,13 @@ export default function PantryScreen() {
               </View>
             ) : (
               filtered.map((item, idx) => (
-                <View key={item.id}>
+                <View key={item.itemId}>
                   <View className="flex-row items-center justify-between px-4 py-3.5">
                     <Text className="flex-1 text-sm">{item.name}</Text>
-                    <Switch checked={item.hasIt} onCheckedChange={() => toggle(item.id)} />
+                    <Switch
+                      checked={item.inStock}
+                      onCheckedChange={() => handleToggle(item.itemId, item.inStock)}
+                    />
                   </View>
                   {idx < filtered.length - 1 && <Separator className="ml-4" />}
                 </View>
@@ -78,7 +117,7 @@ export default function PantryScreen() {
           categories.map((category) => {
             const categoryItems = filtered.filter((i) => i.category === category);
             if (categoryItems.length === 0) return null;
-            const catHas = categoryItems.filter((i) => i.hasIt).length;
+            const catHas = categoryItems.filter((i) => i.inStock).length;
 
             return (
               <View key={category}>
@@ -92,12 +131,12 @@ export default function PantryScreen() {
                 </View>
                 <View className="mx-4 rounded-xl border border-border bg-card overflow-hidden">
                   {categoryItems.map((item, idx) => (
-                    <View key={item.id}>
+                    <View key={item.itemId}>
                       <View className="flex-row items-center justify-between px-4 py-3.5">
                         <Text className="flex-1 text-sm">{item.name}</Text>
                         <Switch
-                          checked={item.hasIt}
-                          onCheckedChange={() => toggle(item.id)}
+                          checked={item.inStock}
+                          onCheckedChange={() => handleToggle(item.itemId, item.inStock)}
                         />
                       </View>
                       {idx < categoryItems.length - 1 && <Separator className="ml-4" />}

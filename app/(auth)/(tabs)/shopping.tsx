@@ -19,41 +19,118 @@ import {
   ChevronUp,
 } from 'lucide-react-native';
 import { cn } from '@/lib/utils';
-import { useShoppingStore } from '@/lib/stores/shopping-store';
-import { usePantryStore } from '@/lib/stores/pantry-store';
-import { useFavoritesStore } from '@/lib/stores/favorites-store';
-import { SHOPPING_CATEGORIES } from '@/lib/data/mock';
+import { getISOWeek, getISOWeekYear } from 'date-fns';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  useShoppingControllerGet,
+  getShoppingControllerGetQueryKey,
+  useShoppingControllerToggleItem,
+  useShoppingControllerReset,
+  useShoppingControllerToggleFavCart,
+  useShoppingControllerToggleFavChecked,
+} from '@/lib/api/endpoints/shopping/shopping';
+import {
+  useFavoritesControllerGetAll,
+  useFavoritesControllerCreate,
+  getFavoritesControllerGetAllQueryKey,
+} from '@/lib/api/endpoints/favorites/favorites';
+import { usePantryControllerGetAll } from '@/lib/api/endpoints/pantry/pantry';
+
+function getWeekStart(offset: number): Date {
+  const today = new Date();
+  const day = today.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + diff + offset * 7);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+function getWeekKey(offset: number): string {
+  const monday = getWeekStart(offset);
+  const year = getISOWeekYear(monday);
+  const week = getISOWeek(monday);
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
 
 export default function ShoppingScreen() {
   const router = useRouter();
-  const { items, checked: shoppingChecked, toggle, reset } = useShoppingStore();
-  const pantryItems = usePantryStore((s) => s.items);
-  const {
-    favorites,
-    inCart,
-    checked: favChecked,
-    toggleInCart,
-    toggleChecked: toggleFavChecked,
-    addFavorite,
-  } = useFavoritesStore();
+  const queryClient = useQueryClient();
+  const weekKey = getWeekKey(0);
 
   const [favExpanded, setFavExpanded] = useState(true);
   const [addFavModal, setAddFavModal] = useState(false);
   const [newFavName, setNewFavName] = useState('');
   const [newFavQty, setNewFavQty] = useState('');
 
+  const { data: shoppingData } = useShoppingControllerGet(weekKey, {
+    query: { refetchInterval: 4000 },
+  });
+  const { data: allFavorites = [] } = useFavoritesControllerGetAll();
+  const { data: pantryItems = [] } = usePantryControllerGetAll();
+
+  const items = shoppingData?.items ?? [];
+  const favCart = shoppingData?.favCart ?? [];
+  const shoppingCategories = [...new Set(items.map((i) => i.category))].sort();
+
+  const toggleItem = useShoppingControllerToggleItem({
+    mutation: {
+      onSuccess: (updated) => {
+        queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), updated);
+      },
+    },
+  });
+
+  const resetMutation = useShoppingControllerReset({
+    mutation: {
+      onSuccess: (updated) => {
+        queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), updated);
+      },
+    },
+  });
+
+  const toggleFavCart = useShoppingControllerToggleFavCart({
+    mutation: {
+      onSuccess: (updated) => {
+        queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), updated);
+      },
+    },
+  });
+
+  const toggleFavChecked = useShoppingControllerToggleFavChecked({
+    mutation: {
+      onSuccess: (updated) => {
+        queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), updated);
+      },
+    },
+  });
+
+  const createFavorite = useFavoritesControllerCreate({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: getFavoritesControllerGetAllQueryKey(),
+        });
+      },
+    },
+  });
+
   const isInPantry = (shopName: string): boolean => {
     const sn = shopName.toLowerCase();
     return pantryItems.some(
-      (p) => p.hasIt && (sn.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(sn)),
+      (p) => p.inStock && (sn.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(sn)),
     );
   };
 
-  const activeItems = items.filter((i) => !shoppingChecked[i.id] && !isInPantry(i.name));
-  const doneItems = items.filter((i) => shoppingChecked[i.id] || isInPantry(i.name));
+  // Build favCart lookup maps
+  const inCartMap = Object.fromEntries(favCart.map((e) => [e.favId, true]));
+  const favCheckedMap = Object.fromEntries(favCart.map((e) => [e.favId, e.checked]));
 
-  const cartFavorites = favorites.filter((f) => inCart[f.id]);
-  const cartFavDone = cartFavorites.filter((f) => favChecked[f.id]);
+  const activeItems = items.filter((i) => !i.checked && !isInPantry(i.name));
+  const doneItems = items.filter((i) => i.checked || isInPantry(i.name));
+
+  const cartFavorites = allFavorites.filter((f) => inCartMap[f.favId]);
+  const cartFavDone = cartFavorites.filter((f) => favCheckedMap[f.favId]);
 
   const totalItems = items.length + cartFavorites.length;
   const totalDone = doneItems.length + cartFavDone.length;
@@ -61,10 +138,12 @@ export default function ShoppingScreen() {
 
   const handleAddFavorite = () => {
     if (!newFavName.trim()) return;
-    addFavorite(
-      { name: newFavName.trim(), quantity: newFavQty.trim() || '1 pz', category: 'Snack' },
-      true,
-    );
+    createFavorite.mutate({
+      data: { name: newFavName.trim(), defaultQty: newFavQty.trim() || '1 pz', category: 'Snack' },
+    });
+    // Also add to cart for this week
+    // After favorite is created, we'd need to toggle it into cart.
+    // For simplicity, create the favorite and let user toggle it.
     setNewFavName('');
     setNewFavQty('');
     setAddFavModal(false);
@@ -79,7 +158,11 @@ export default function ShoppingScreen() {
           <Text variant="muted">{pendingCount} articoli da acquistare</Text>
         </View>
         <View className="flex-row gap-2">
-          <Button size="icon" variant="outline" onPress={reset}>
+          <Button
+            size="icon"
+            variant="outline"
+            onPress={() => resetMutation.mutate({ weekKey })}
+          >
             <RefreshCcw className="text-foreground" size={18} />
           </Button>
         </View>
@@ -113,11 +196,11 @@ export default function ShoppingScreen() {
 
       <ScrollView contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
         {/* ── Lista da ricette ──────────────────────────────────── */}
-        {SHOPPING_CATEGORIES.map((category) => {
+        {shoppingCategories.map((category) => {
           const catItems = items.filter((i) => i.category === category);
           if (catItems.length === 0) return null;
 
-          const catDone = catItems.filter((i) => shoppingChecked[i.id] || isInPantry(i.name));
+          const catDone = catItems.filter((i) => i.checked || isInPantry(i.name));
 
           return (
             <View key={category}>
@@ -132,14 +215,19 @@ export default function ShoppingScreen() {
 
               <View className="mx-4 rounded-xl border border-border bg-card overflow-hidden">
                 {catItems.map((item, idx) => {
-                  const isBought = !!shoppingChecked[item.id];
                   const inPantry = isInPantry(item.name);
-                  const isDone = isBought || inPantry;
+                  const isDone = item.checked || inPantry;
 
                   return (
                     <View key={item.id}>
                       <Pressable
-                        onPress={() => !inPantry && toggle(item.id)}
+                        onPress={() =>
+                          !inPantry &&
+                          toggleItem.mutate({
+                            weekKey,
+                            data: { itemId: item.id, checked: !item.checked },
+                          })
+                        }
                         className={cn(
                           'flex-row items-center gap-3 px-4 py-3.5',
                           isDone ? 'opacity-50' : 'active:bg-muted/50',
@@ -167,7 +255,12 @@ export default function ShoppingScreen() {
                               <Text className="text-[10px]">dispensa</Text>
                             </Badge>
                           )}
-                          <Text className="text-xs text-muted-foreground">{item.quantity}</Text>
+                          <View className="flex-row items-center gap-1">
+                            <Text className="text-xs text-muted-foreground">{item.qty}</Text>
+                            {item.count > 1 && (
+                              <Text className="text-xs font-semibold text-primary">×{item.count}</Text>
+                            )}
+                          </View>
                         </View>
                       </Pressable>
                       {idx < catItems.length - 1 && <Separator className="ml-12" />}
@@ -179,8 +272,18 @@ export default function ShoppingScreen() {
           );
         })}
 
-        {/* Empty state (solo ricette) */}
-        {activeItems.length === 0 && cartFavorites.length === 0 && (
+        {/* Empty state */}
+        {activeItems.length === 0 && cartFavorites.length === 0 && items.length === 0 && (
+          <View className="mx-4 mt-6 items-center gap-2 p-6 rounded-xl bg-primary/10 border border-primary/20">
+            <ShoppingCart className="text-primary" size={32} />
+            <Text className="font-semibold text-primary">Lista vuota</Text>
+            <Text className="text-sm text-muted-foreground text-center">
+              Pianifica la settimana per generare la lista spesa.
+            </Text>
+          </View>
+        )}
+
+        {activeItems.length === 0 && cartFavorites.length > 0 && doneItems.length === items.length && (
           <View className="mx-4 mt-6 items-center gap-2 p-6 rounded-xl bg-primary/10 border border-primary/20">
             <ShoppingCart className="text-primary" size={32} />
             <Text className="font-semibold text-primary">Spesa completata!</Text>
@@ -230,7 +333,7 @@ export default function ShoppingScreen() {
 
           {favExpanded && (
             <View className="rounded-xl border border-border bg-card overflow-hidden">
-              {favorites.length === 0 ? (
+              {allFavorites.length === 0 ? (
                 <View className="items-center py-8 gap-2 px-4">
                   <Star className="text-muted-foreground/40" size={28} />
                   <Text className="text-sm text-muted-foreground text-center">
@@ -238,12 +341,12 @@ export default function ShoppingScreen() {
                   </Text>
                 </View>
               ) : (
-                favorites.map((fav, idx) => {
-                  const isInCartFav = !!inCart[fav.id];
-                  const isCheckedFav = !!favChecked[fav.id];
+                allFavorites.map((fav, idx) => {
+                  const isInCartFav = !!inCartMap[fav.favId];
+                  const isCheckedFav = !!favCheckedMap[fav.favId];
 
                   return (
-                    <View key={fav.id}>
+                    <View key={fav.favId}>
                       <View
                         className={cn(
                           'flex-row items-center gap-3 px-4 py-3.5',
@@ -252,7 +355,13 @@ export default function ShoppingScreen() {
                       >
                         {/* Checkbox — attivo solo se in cart */}
                         <Pressable
-                          onPress={() => isInCartFav && toggleFavChecked(fav.id)}
+                          onPress={() =>
+                            isInCartFav &&
+                            toggleFavChecked.mutate({
+                              weekKey,
+                              data: { favId: fav.favId, checked: !isCheckedFav },
+                            })
+                          }
                           disabled={!isInCartFav}
                         >
                           <View
@@ -283,13 +392,18 @@ export default function ShoppingScreen() {
                         </Text>
 
                         {/* Quantità */}
-                        <Text className="text-xs text-muted-foreground mr-2">{fav.quantity}</Text>
+                        <Text className="text-xs text-muted-foreground mr-2">{fav.defaultQty}</Text>
 
                         {/* Toggle in/out cart */}
                         <Button
                           size="icon"
                           variant={isInCartFav ? 'default' : 'outline'}
-                          onPress={() => toggleInCart(fav.id)}
+                          onPress={() =>
+                            toggleFavCart.mutate({
+                              weekKey,
+                              data: { favId: fav.favId, inCart: !isInCartFav },
+                            })
+                          }
                           className="w-7 h-7 rounded-full"
                         >
                           {isInCartFav ? (
@@ -299,7 +413,7 @@ export default function ShoppingScreen() {
                           )}
                         </Button>
                       </View>
-                      {idx < favorites.length - 1 && <Separator className="ml-12" />}
+                      {idx < allFavorites.length - 1 && <Separator className="ml-12" />}
                     </View>
                   );
                 })
@@ -339,11 +453,11 @@ export default function ShoppingScreen() {
             </View>
             <View className="bg-muted/50 rounded-xl p-4">
               <Text className="text-xs text-muted-foreground">
-                Verrà aggiunto subito alla spesa di questa settimana e salvato per le prossime.
+                Verrà salvato tra i preferiti e potrai aggiungerlo alla spesa settimanale.
               </Text>
             </View>
             <Button onPress={handleAddFavorite} disabled={!newFavName.trim()}>
-              <Text>Salva e aggiungi alla spesa</Text>
+              <Text>Salva preferito</Text>
             </Button>
           </View>
         </SafeAreaView>

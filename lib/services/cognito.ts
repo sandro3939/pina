@@ -143,6 +143,16 @@ class CognitoAmplifyService {
       return null;
     }
   }
+
+  /** ID token — contiene custom:familyId, usato per le chiamate al backend */
+  async getIdToken(): Promise<string | null> {
+    try {
+      const session = await this.getSession();
+      return session?.idToken || null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 export const cognitoService = new CognitoAmplifyService();

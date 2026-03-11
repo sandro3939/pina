@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, Pressable, Modal } from 'react-native';
+import { View, ScrollView, Pressable, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
@@ -9,9 +9,20 @@ import { Separator } from '@/components/ui/separator';
 import { Plus, ChevronLeft, ChevronRight, Utensils, X, Search, Clock, Users } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { cn } from '@/lib/utils';
-import { type DayPlan, type Recipe } from '@/lib/data/mock';
-import { useRecipesStore } from '@/lib/stores/recipes-store';
-import { usePlannerStore } from '@/lib/stores/planner-store';
+import { getISOWeek, getISOWeekYear } from 'date-fns';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  usePlannerControllerGetWeek,
+  getPlannerControllerGetWeekQueryKey,
+  usePlannerControllerAssign,
+  usePlannerControllerRemove,
+} from '@/lib/api/endpoints/planner/planner';
+import { useRecipesControllerFindAll } from '@/lib/api/endpoints/recipes/recipes';
+import {
+  useShoppingControllerGenerate,
+  getShoppingControllerGetQueryKey,
+} from '@/lib/api/endpoints/shopping/shopping';
+import type { PlanSlotResponseDto, ResponseRecipeDto } from '@/lib/api/model';
 
 const MONTHS = [
   'gen', 'feb', 'mar', 'apr', 'mag', 'giu',
@@ -29,6 +40,13 @@ function getWeekStart(offset: number): Date {
   return monday;
 }
 
+function getWeekKey(offset: number): string {
+  const monday = getWeekStart(offset);
+  const year = getISOWeekYear(monday);
+  const week = getISOWeek(monday);
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
+
 function isToday(date: Date): boolean {
   const today = new Date();
   return (
@@ -38,8 +56,41 @@ function isToday(date: Date): boolean {
   );
 }
 
+type MealPlan = {
+  primo: { recipeId: string; recipeName: string } | null;
+  secondo: { recipeId: string; recipeName: string } | null;
+};
+
+type DayPlan = {
+  pranzo: MealPlan;
+  cena: MealPlan;
+};
+
+function parsePlannerData(slots: Record<string, PlanSlotResponseDto>): DayPlan[] {
+  const empty = (): MealPlan => ({ primo: null, secondo: null });
+  const result: DayPlan[] = Array.from({ length: 7 }, () => ({
+    pranzo: empty(),
+    cena: empty(),
+  }));
+
+  for (const [slotKey, slot] of Object.entries(slots)) {
+    // slotKey: "2026-W11#00#PRANZO"
+    const parts = slotKey.split('#');
+    if (parts.length < 3) continue;
+    const dayIndex = parseInt(parts[1], 10);
+    const meal = parts[2].toLowerCase() as 'pranzo' | 'cena';
+    if (dayIndex >= 0 && dayIndex < 7 && (meal === 'pranzo' || meal === 'cena')) {
+      result[dayIndex][meal] = {
+        primo: slot.primo ?? null,
+        secondo: slot.secondo ?? null,
+      };
+    }
+  }
+
+  return result;
+}
+
 type PickerSlot = {
-  weekOffset: number;
   dayIndex: number;
   meal: 'pranzo' | 'cena';
   course: 'primo' | 'secondo';
@@ -47,12 +98,46 @@ type PickerSlot = {
 
 export default function PlannerScreen() {
   const router = useRouter();
-  const allRecipes = useRecipesStore((s) => s.recipes);
-  const { getWeek, assignRecipe: storeAssign, removeRecipe: storeRemove } = usePlannerStore();
+  const queryClient = useQueryClient();
   const [weekOffset, setWeekOffset] = useState(0);
-
   const [pickerSlot, setPickerSlot] = useState<PickerSlot | null>(null);
   const [pickerSearch, setPickerSearch] = useState('');
+
+  const weekKey = getWeekKey(weekOffset);
+
+  const { data: slotsRecord = {}, isLoading: plannerLoading } =
+    usePlannerControllerGetWeek(weekKey);
+  const { data: allRecipes = [] } = useRecipesControllerFindAll();
+
+  const generateShopping = useShoppingControllerGenerate({
+    mutation: {
+      onSuccess: (updated) => {
+        queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), updated);
+      },
+    },
+  });
+
+  const assignMutation = usePlannerControllerAssign({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: getPlannerControllerGetWeekQueryKey(weekKey),
+        });
+        generateShopping.mutate({ weekKey });
+      },
+    },
+  });
+
+  const removeMutation = usePlannerControllerRemove({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: getPlannerControllerGetWeekQueryKey(weekKey),
+        });
+        generateShopping.mutate({ weekKey });
+      },
+    },
+  });
 
   const monday = getWeekStart(weekOffset);
   const allWeekDays = Array.from({ length: 7 }, (_, i) => {
@@ -71,10 +156,10 @@ export default function PlannerScreen() {
   const last = allWeekDays[6];
   const weekLabel = `${first.getDate()} ${MONTHS[first.getMonth()]} — ${last.getDate()} ${MONTHS[last.getMonth()]}`;
 
-  const currentPlan: DayPlan[] = getWeek(weekOffset);
+  const currentPlan = parsePlannerData(slotsRecord);
 
   const openPicker = (dayIndex: number, meal: 'pranzo' | 'cena', course: 'primo' | 'secondo') => {
-    setPickerSlot({ weekOffset, dayIndex, meal, course });
+    setPickerSlot({ dayIndex, meal, course });
     setPickerSearch('');
   };
 
@@ -83,15 +168,21 @@ export default function PlannerScreen() {
     setPickerSearch('');
   };
 
-  const assignRecipe = (recipe: Recipe) => {
+  const assignRecipe = (recipe: ResponseRecipeDto) => {
     if (!pickerSlot) return;
-    const { weekOffset: wo, dayIndex, meal, course } = pickerSlot;
-    storeAssign(wo, dayIndex, meal, course, { recipeId: recipe.id, recipeName: recipe.name });
+    const { dayIndex, meal, course } = pickerSlot;
+    assignMutation.mutate({
+      weekKey,
+      dayIndex,
+      meal,
+      course,
+      data: { recipeId: recipe.recipeId, recipeName: recipe.name },
+    });
     closePicker();
   };
 
   const removeRecipe = (dayIndex: number, meal: 'pranzo' | 'cena', course: 'primo' | 'secondo') => {
-    storeRemove(weekOffset, dayIndex, meal, course);
+    removeMutation.mutate({ weekKey, dayIndex, meal, course });
   };
 
   const pickerRecipes = allRecipes.filter((r) =>
@@ -146,111 +237,80 @@ export default function PlannerScreen() {
         <Separator />
 
         {/* Day cards */}
-        <View className="px-4 pt-3 gap-3">
-          {weekDays.map((date) => {
-            const i = allWeekDays.findIndex((d) => d.getTime() === date.getTime());
-            const plan = currentPlan[i] ?? { pranzo: { primo: null, secondo: null }, cena: { primo: null, secondo: null } };
-            const isCurrentDay = isToday(date);
+        {plannerLoading ? (
+          <View className="items-center py-16">
+            <ActivityIndicator />
+          </View>
+        ) : (
+          <View className="px-4 pt-3 gap-3">
+            {weekDays.map((date) => {
+              const i = allWeekDays.findIndex((d) => d.getTime() === date.getTime());
+              const plan = currentPlan[i] ?? {
+                pranzo: { primo: null, secondo: null },
+                cena: { primo: null, secondo: null },
+              };
+              const isCurrentDay = isToday(date);
 
-            return (
-              <View
-                key={i}
-                className={cn(
-                  'rounded-xl border',
-                  isCurrentDay ? 'border-primary bg-primary/5' : 'border-border bg-card',
-                )}
-              >
-                {/* Day header */}
-                <View className="flex-row items-center gap-2 px-3 py-2.5">
-                  <Text
-                    className={cn(
-                      'text-sm font-semibold',
-                      isCurrentDay ? 'text-primary' : 'text-foreground',
-                    )}
-                  >
-                    {DAY_LABELS[i]}
-                  </Text>
-                  <Text className="text-xs text-muted-foreground">
-                    {date.getDate()} {MONTHS[date.getMonth()]}
-                  </Text>
-                  {isCurrentDay && (
-                    <Badge className="px-1.5">
-                      <Text className="text-[10px]">oggi</Text>
-                    </Badge>
+              return (
+                <View
+                  key={i}
+                  className={cn(
+                    'rounded-xl border',
+                    isCurrentDay ? 'border-primary bg-primary/5' : 'border-border bg-card',
                   )}
-                </View>
+                >
+                  {/* Day header */}
+                  <View className="flex-row items-center gap-2 px-3 py-2.5">
+                    <Text
+                      className={cn(
+                        'text-sm font-semibold',
+                        isCurrentDay ? 'text-primary' : 'text-foreground',
+                      )}
+                    >
+                      {DAY_LABELS[i]}
+                    </Text>
+                    <Text className="text-xs text-muted-foreground">
+                      {date.getDate()} {MONTHS[date.getMonth()]}
+                    </Text>
+                    {isCurrentDay && (
+                      <Badge className="px-1.5">
+                        <Text className="text-[10px]">oggi</Text>
+                      </Badge>
+                    )}
+                  </View>
 
-                <Separator />
+                  <Separator />
 
-                {/* Meal slots */}
-                <View className="px-3 py-2.5 gap-3">
-                  {(['pranzo', 'cena'] as const).map((meal) => {
-                    const { primo, secondo } = plan[meal];
-                    const hasBoth = primo !== null && secondo !== null;
+                  {/* Meal slots */}
+                  <View className="px-3 py-2.5 gap-3">
+                    {(['pranzo', 'cena'] as const).map((meal) => {
+                      const { primo, secondo } = plan[meal];
+                      const hasBoth = primo !== null && secondo !== null;
 
-                    return (
-                      <View key={meal} className="flex-row items-start gap-2">
-                        {/* Label pasto */}
-                        <Text
-                          className={cn(
-                            'text-xs text-muted-foreground w-12 capitalize',
-                            primo ? 'pt-2.5' : 'pt-2',
-                          )}
-                        >
-                          {meal}
-                        </Text>
+                      return (
+                        <View key={meal} className="flex-row items-start gap-2">
+                          {/* Label pasto */}
+                          <Text
+                            className={cn(
+                              'text-xs text-muted-foreground w-12 capitalize',
+                              primo ? 'pt-2.5' : 'pt-2',
+                            )}
+                          >
+                            {meal}
+                          </Text>
 
-                        <View className="flex-1 gap-1.5">
-                          {/* ── Primo / Unico ── */}
-                          {primo ? (
-                            <View className="flex-row items-center gap-2 bg-primary/10 rounded-lg px-2.5 py-2">
-                              {hasBoth && (
-                                <Text className="text-[10px] text-primary/60 font-bold w-4">1°</Text>
-                              )}
-                              <Pressable
-                                onPress={() =>
-                                  router.push({
-                                    pathname: '/(auth)/recipe/[id]',
-                                    params: { id: primo.recipeId },
-                                  })
-                                }
-                                className="flex-1 flex-row items-center gap-2 active:opacity-70"
-                              >
-                                <Utensils className="text-primary" size={13} />
-                                <Text
-                                  className="text-sm font-medium text-primary flex-1"
-                                  numberOfLines={1}
-                                >
-                                  {primo.recipeName}
-                                </Text>
-                              </Pressable>
-                              <Pressable
-                                onPress={() => removeRecipe(i, meal, 'primo')}
-                                className="p-0.5 active:opacity-50"
-                              >
-                                <X className="text-primary/60" size={14} />
-                              </Pressable>
-                            </View>
-                          ) : (
-                            <Pressable
-                              onPress={() => openPicker(i, meal, 'primo')}
-                              className="flex-row items-center gap-1.5 border border-dashed border-border rounded-lg px-2.5 py-2 active:opacity-70"
-                            >
-                              <Plus className="text-muted-foreground" size={13} />
-                              <Text className="text-xs text-muted-foreground">Aggiungi ricetta</Text>
-                            </Pressable>
-                          )}
-
-                          {/* ── Secondo (visibile solo se primo è impostato) ── */}
-                          {primo && (
-                            secondo ? (
+                          <View className="flex-1 gap-1.5">
+                            {/* ── Primo / Unico ── */}
+                            {primo ? (
                               <View className="flex-row items-center gap-2 bg-primary/10 rounded-lg px-2.5 py-2">
-                                <Text className="text-[10px] text-primary/60 font-bold w-4">2°</Text>
+                                {hasBoth && (
+                                  <Text className="text-[10px] text-primary/60 font-bold w-4">1°</Text>
+                                )}
                                 <Pressable
                                   onPress={() =>
                                     router.push({
                                       pathname: '/(auth)/recipe/[id]',
-                                      params: { id: secondo.recipeId },
+                                      params: { id: primo.recipeId },
                                     })
                                   }
                                   className="flex-1 flex-row items-center gap-2 active:opacity-70"
@@ -260,11 +320,11 @@ export default function PlannerScreen() {
                                     className="text-sm font-medium text-primary flex-1"
                                     numberOfLines={1}
                                   >
-                                    {secondo.recipeName}
+                                    {primo.recipeName}
                                   </Text>
                                 </Pressable>
                                 <Pressable
-                                  onPress={() => removeRecipe(i, meal, 'secondo')}
+                                  onPress={() => removeRecipe(i, meal, 'primo')}
                                   className="p-0.5 active:opacity-50"
                                 >
                                   <X className="text-primary/60" size={14} />
@@ -272,23 +332,63 @@ export default function PlannerScreen() {
                               </View>
                             ) : (
                               <Pressable
-                                onPress={() => openPicker(i, meal, 'secondo')}
-                                className="flex-row items-center gap-1.5 pl-1 py-0.5 active:opacity-70"
+                                onPress={() => openPicker(i, meal, 'primo')}
+                                className="flex-row items-center gap-1.5 border border-dashed border-border rounded-lg px-2.5 py-2 active:opacity-70"
                               >
-                                <Plus className="text-muted-foreground/50" size={12} />
-                                <Text className="text-xs text-muted-foreground/50">Aggiungi secondo</Text>
+                                <Plus className="text-muted-foreground" size={13} />
+                                <Text className="text-xs text-muted-foreground">Aggiungi ricetta</Text>
                               </Pressable>
-                            )
-                          )}
+                            )}
+
+                            {/* ── Secondo (visibile solo se primo è impostato) ── */}
+                            {primo && (
+                              secondo ? (
+                                <View className="flex-row items-center gap-2 bg-primary/10 rounded-lg px-2.5 py-2">
+                                  <Text className="text-[10px] text-primary/60 font-bold w-4">2°</Text>
+                                  <Pressable
+                                    onPress={() =>
+                                      router.push({
+                                        pathname: '/(auth)/recipe/[id]',
+                                        params: { id: secondo.recipeId },
+                                      })
+                                    }
+                                    className="flex-1 flex-row items-center gap-2 active:opacity-70"
+                                  >
+                                    <Utensils className="text-primary" size={13} />
+                                    <Text
+                                      className="text-sm font-medium text-primary flex-1"
+                                      numberOfLines={1}
+                                    >
+                                      {secondo.recipeName}
+                                    </Text>
+                                  </Pressable>
+                                  <Pressable
+                                    onPress={() => removeRecipe(i, meal, 'secondo')}
+                                    className="p-0.5 active:opacity-50"
+                                  >
+                                    <X className="text-primary/60" size={14} />
+                                  </Pressable>
+                                </View>
+                              ) : (
+                                <Pressable
+                                  onPress={() => openPicker(i, meal, 'secondo')}
+                                  className="flex-row items-center gap-1.5 pl-1 py-0.5 active:opacity-70"
+                                >
+                                  <Plus className="text-muted-foreground/50" size={12} />
+                                  <Text className="text-xs text-muted-foreground/50">Aggiungi secondo</Text>
+                                </Pressable>
+                              )
+                            )}
+                          </View>
                         </View>
-                      </View>
-                    );
-                  })}
+                      );
+                    })}
+                  </View>
                 </View>
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
 
       {/* ── Recipe Picker Modal ─────────────────────────────────── */}
@@ -349,7 +449,7 @@ export default function PlannerScreen() {
             ) : (
               pickerRecipes.map((recipe) => (
                 <Pressable
-                  key={recipe.id}
+                  key={recipe.recipeId}
                   onPress={() => assignRecipe(recipe)}
                   className="flex-row items-center gap-3 p-3 rounded-xl border border-border bg-card active:bg-muted"
                 >

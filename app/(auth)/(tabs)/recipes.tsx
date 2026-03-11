@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, Pressable, Modal } from 'react-native';
+import { View, ScrollView, Pressable, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
@@ -9,8 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Plus, Search, Clock, Users, X, FileEdit, Globe, Wand2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { cn } from '@/lib/utils';
-import { useRecipesStore } from '@/lib/stores/recipes-store';
+import { useRecipesControllerFindAll } from '@/lib/api/endpoints/recipes/recipes';
 
 const ALL_TAGS = ['tutti', 'veloce', 'vegetariano', 'vegano', 'proteico', 'leggero', 'comfort'];
 
@@ -24,7 +23,7 @@ interface AddOption {
 
 export default function RecipesScreen() {
   const router = useRouter();
-  const recipes = useRecipesStore((s) => s.recipes);
+  const { data: recipes = [], isLoading } = useRecipesControllerFindAll();
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState('tutti');
   const [addModalVisible, setAddModalVisible] = useState(false);
@@ -52,7 +51,7 @@ export default function RecipesScreen() {
     },
     {
       id: 'ai',
-      label: 'Chiedi all\'AI',
+      label: "Chiedi all'AI",
       description: 'Descrivi cosa vuoi cucinare, ci pensa Claude',
       icon: <Wand2 className="text-primary" size={22} />,
       route: '/(auth)/recipe/new/ai',
@@ -114,69 +113,79 @@ export default function RecipesScreen() {
 
       <Separator />
 
-      <ScrollView className="flex-1" contentContainerClassName="px-4 pt-3 pb-6 gap-3" showsVerticalScrollIndicator={false}>
-        {filtered.length === 0 ? (
-          <View className="items-center py-16 gap-3">
-            <Text variant="muted">Nessuna ricetta trovata</Text>
-            <Button variant="outline" onPress={() => setAddModalVisible(true)}>
-              <Plus className="text-foreground" size={16} />
-              <Text>Aggiungi ricetta</Text>
-            </Button>
-          </View>
-        ) : (
-          filtered.map((recipe) => (
-            <Pressable
-              key={recipe.id}
-              onPress={() =>
-                router.push({ pathname: '/(auth)/recipe/[id]', params: { id: recipe.id } })
-              }
-              className="active:opacity-80"
-            >
-              <Card>
-                <CardContent className="pt-4">
-                  <View className="flex-row items-start justify-between gap-2">
-                    <Text className="text-base font-semibold flex-1" numberOfLines={1}>
-                      {recipe.name}
-                    </Text>
-                    {recipe.rating > 0 && (
-                      <Text className="text-sm text-muted-foreground shrink-0">
-                        {'★'.repeat(recipe.rating)}
+      {isLoading ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator />
+        </View>
+      ) : (
+        <ScrollView
+          className="flex-1"
+          contentContainerClassName="px-4 pt-3 pb-6 gap-3"
+          showsVerticalScrollIndicator={false}
+        >
+          {filtered.length === 0 ? (
+            <View className="items-center py-16 gap-3">
+              <Text variant="muted">Nessuna ricetta trovata</Text>
+              <Button variant="outline" onPress={() => setAddModalVisible(true)}>
+                <Plus className="text-foreground" size={16} />
+                <Text>Aggiungi ricetta</Text>
+              </Button>
+            </View>
+          ) : (
+            filtered.map((recipe) => (
+              <Pressable
+                key={recipe.recipeId}
+                onPress={() =>
+                  router.push({ pathname: '/(auth)/recipe/[id]', params: { id: recipe.recipeId } })
+                }
+                className="active:opacity-80"
+              >
+                <Card>
+                  <CardContent className="pt-4">
+                    <View className="flex-row items-start justify-between gap-2">
+                      <Text className="text-base font-semibold flex-1" numberOfLines={1}>
+                        {recipe.name}
                       </Text>
+                      {recipe.rating > 0 && (
+                        <Text className="text-sm text-muted-foreground shrink-0">
+                          {'★'.repeat(recipe.rating)}
+                        </Text>
+                      )}
+                    </View>
+
+                    {recipe.description ? (
+                      <Text className="text-sm text-muted-foreground mt-1" numberOfLines={2}>
+                        {recipe.description}
+                      </Text>
+                    ) : null}
+
+                    <View className="flex-row items-center gap-4 mt-3">
+                      <View className="flex-row items-center gap-1.5">
+                        <Clock className="text-muted-foreground" size={13} />
+                        <Text className="text-xs text-muted-foreground">{recipe.timeMinutes} min</Text>
+                      </View>
+                      <View className="flex-row items-center gap-1.5">
+                        <Users className="text-muted-foreground" size={13} />
+                        <Text className="text-xs text-muted-foreground">{recipe.servings} pers.</Text>
+                      </View>
+                    </View>
+
+                    {recipe.tags.length > 0 && (
+                      <View className="flex-row flex-wrap gap-1.5 mt-2.5">
+                        {recipe.tags.map((tag) => (
+                          <Badge key={tag} variant="secondary">
+                            <Text className="capitalize">{tag}</Text>
+                          </Badge>
+                        ))}
+                      </View>
                     )}
-                  </View>
-
-                  {recipe.description ? (
-                    <Text className="text-sm text-muted-foreground mt-1" numberOfLines={2}>
-                      {recipe.description}
-                    </Text>
-                  ) : null}
-
-                  <View className="flex-row items-center gap-4 mt-3">
-                    <View className="flex-row items-center gap-1.5">
-                      <Clock className="text-muted-foreground" size={13} />
-                      <Text className="text-xs text-muted-foreground">{recipe.timeMinutes} min</Text>
-                    </View>
-                    <View className="flex-row items-center gap-1.5">
-                      <Users className="text-muted-foreground" size={13} />
-                      <Text className="text-xs text-muted-foreground">{recipe.servings} pers.</Text>
-                    </View>
-                  </View>
-
-                  {recipe.tags.length > 0 && (
-                    <View className="flex-row flex-wrap gap-1.5 mt-2.5">
-                      {recipe.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary">
-                          <Text className="capitalize">{tag}</Text>
-                        </Badge>
-                      ))}
-                    </View>
-                  )}
-                </CardContent>
-              </Card>
-            </Pressable>
-          ))
-        )}
-      </ScrollView>
+                  </CardContent>
+                </Card>
+              </Pressable>
+            ))
+          )}
+        </ScrollView>
+      )}
 
       {/* ── Add Option Modal ──────────────────────────────────── */}
       <Modal
