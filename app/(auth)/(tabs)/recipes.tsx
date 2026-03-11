@@ -146,11 +146,13 @@ export default function RecipesScreen() {
                       <Text className="text-base font-semibold flex-1" numberOfLines={1}>
                         {recipe.name}
                       </Text>
-                      {recipe.rating > 0 && (
-                        <Text className="text-sm text-muted-foreground shrink-0">
-                          {'★'.repeat(recipe.rating)}
-                        </Text>
-                      )}
+                      <View className="flex-row shrink-0">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Text key={i} className={i < (recipe.rating ?? 0) ? 'text-sm text-primary' : 'text-sm text-muted-foreground/25'}>
+                            ★
+                          </Text>
+                        ))}
+                      </View>
                     </View>
 
                     {recipe.description ? (

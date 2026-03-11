@@ -260,9 +260,13 @@ export default function RecipeDetailScreen() {
             <Text variant="h2" className="flex-1 border-0 pb-0">
               {recipe.name}
             </Text>
-            <Text className="text-lg text-muted-foreground shrink-0">
-              {'★'.repeat(recipe.rating)}
-            </Text>
+            <View className="flex-row shrink-0">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Text key={i} className={i < (recipe.rating ?? 0) ? 'text-lg text-primary' : 'text-lg text-muted-foreground/25'}>
+                  ★
+                </Text>
+              ))}
+            </View>
           </View>
 
           {/* Description */}

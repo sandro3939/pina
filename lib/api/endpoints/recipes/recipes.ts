@@ -22,6 +22,7 @@ import type {
 
 import type {
   CreateRecipeDto,
+  ImportedRecipeDto,
   RecipesControllerRemove200,
   ResponseRecipeDto,
   UpdateRecipeDto,
@@ -590,4 +591,39 @@ export const useRecipesControllerRemove = <
   const mutationOptions = getRecipesControllerRemoveMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
+};
+
+// ── Import from URL (manually added) ─────────────────────────────────────────
+
+export const recipesControllerImportFromUrl = (url: string) => {
+  return customInstance<ImportedRecipeDto>({
+    url: `/recipes/import-url`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: { url },
+  });
+};
+
+export const useRecipesControllerImportFromUrl = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recipesControllerImportFromUrl>>,
+    TError,
+    { url: string },
+    TContext
+  >;
+}, queryClient?: QueryClient): UseMutationResult<
+  Awaited<ReturnType<typeof recipesControllerImportFromUrl>>,
+  TError,
+  { url: string },
+  TContext
+> => {
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recipesControllerImportFromUrl>>,
+    { url: string }
+  > = ({ url }) => recipesControllerImportFromUrl(url);
+
+  return useMutation({ mutationFn, ...options?.mutation }, queryClient);
 };

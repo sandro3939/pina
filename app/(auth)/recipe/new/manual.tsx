@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
@@ -47,6 +47,7 @@ export default function ManualRecipeScreen() {
   const [timeMinutes, setTimeMinutes] = useState('');
   const [servings, setServings] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [rating, setRating] = useState(0);
   const [ingredients, setIngredients] = useState<Ingredient[]>([{ name: '', amount: '' }]);
   const [steps, setSteps] = useState<string[]>(['']);
   const [error, setError] = useState('');
@@ -79,7 +80,7 @@ export default function ManualRecipeScreen() {
         tags: selectedTags,
         servings: parseInt(servings, 10) || 4,
         timeMinutes: parseInt(timeMinutes, 10) || 30,
-        rating: 0,
+        rating,
         ingredients: ingredients.filter((i) => i.name.trim()),
         steps: steps.filter((s) => s.trim()),
       },
@@ -180,6 +181,20 @@ export default function ManualRecipeScreen() {
                 >
                   <Text className="capitalize">{tag}</Text>
                 </Button>
+              ))}
+            </View>
+          </View>
+
+          {/* Rating */}
+          <View className="gap-2">
+            <Label nativeID="rating">Valutazione</Label>
+            <View className="flex-row gap-1">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Pressable key={star} onPress={() => setRating(star === rating ? 0 : star)} hitSlop={6}>
+                  <Text className={star <= rating ? 'text-2xl text-primary' : 'text-2xl text-muted-foreground/30'}>
+                    ★
+                  </Text>
+                </Pressable>
               ))}
             </View>
           </View>

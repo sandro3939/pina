@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
@@ -37,6 +37,7 @@ export default function EditRecipeScreen() {
   const [timeMinutes, setTimeMinutes] = useState('');
   const [servings, setServings] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [rating, setRating] = useState(0);
   const [ingredients, setIngredients] = useState<Ingredient[]>([{ name: '', amount: '' }]);
   const [steps, setSteps] = useState<string[]>(['']);
   const [error, setError] = useState('');
@@ -48,6 +49,7 @@ export default function EditRecipeScreen() {
     setTimeMinutes(String(recipe.timeMinutes));
     setServings(String(recipe.servings));
     setSelectedTags(recipe.tags);
+    setRating(recipe.rating ?? 0);
     setIngredients(
       recipe.ingredients.length > 0
         ? recipe.ingredients.map((i) => ({ name: i.name, amount: i.amount }))
@@ -98,6 +100,7 @@ export default function EditRecipeScreen() {
         name: name.trim(),
         description: description.trim() || undefined,
         tags: selectedTags,
+        rating,
         servings: parseInt(servings, 10) || 4,
         timeMinutes: parseInt(timeMinutes, 10) || 30,
         ingredients: ingredients.filter((i) => i.name.trim()),
@@ -206,6 +209,20 @@ export default function EditRecipeScreen() {
                 >
                   <Text className="capitalize">{tag}</Text>
                 </Button>
+              ))}
+            </View>
+          </View>
+
+          {/* Rating */}
+          <View className="gap-2">
+            <Label nativeID="rating">Valutazione</Label>
+            <View className="flex-row gap-1">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Pressable key={star} onPress={() => setRating(star === rating ? 0 : star)} hitSlop={6}>
+                  <Text className={star <= rating ? 'text-2xl text-primary' : 'text-2xl text-muted-foreground/30'}>
+                    ★
+                  </Text>
+                </Pressable>
               ))}
             </View>
           </View>

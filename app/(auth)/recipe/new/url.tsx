@@ -9,73 +9,80 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Globe, Clock, Users, CheckCircle2, RotateCcw } from 'lucide-react-native';
-import { useRecipesStore } from '@/lib/stores/recipes-store';
-import type { Recipe } from '@/lib/data/mock';
+import { ArrowLeft, Globe, Clock, Users, CheckCircle2, RotateCcw, AlertCircle } from 'lucide-react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRecipesControllerImportFromUrl } from '@/lib/api/endpoints/recipes/recipes';
+import {
+  useRecipesControllerCreate,
+  getRecipesControllerFindAllQueryKey,
+} from '@/lib/api/endpoints/recipes/recipes';
+import type { ImportedRecipeDto } from '@/lib/api/model';
 
 type ScreenState = 'input' | 'loading' | 'preview';
 
-// Ricetta mock "estratta" dall'URL
-const MOCK_EXTRACTED: Omit<Recipe, 'id'> = {
-  name: 'Lasagne al Ragù della Nonna',
-  description:
-    'La classica lasagne della domenica, con ragù lento cotto per ore e besciamella cremosa fatta in casa.',
-  tags: ['comfort'],
-  servings: 6,
-  timeMinutes: 90,
-  rating: 0,
-  ingredients: [
-    { name: 'Sfoglie di pasta fresca', amount: '500g' },
-    { name: 'Carne macinata mista', amount: '500g' },
-    { name: 'Passata di pomodoro', amount: '400ml' },
-    { name: 'Besciamella', amount: '500ml' },
-    { name: 'Parmigiano grattugiato', amount: '100g' },
-    { name: 'Mozzarella', amount: '200g' },
-    { name: 'Cipolla', amount: '1' },
-    { name: 'Carota', amount: '1' },
-    { name: 'Sedano', amount: '1 costa' },
-    { name: 'Vino rosso', amount: '100ml' },
-  ],
-  steps: [
-    'Prepara il ragù: soffriggi cipolla, carota e sedano in olio, aggiungi la carne e rosola.',
-    'Sfuma con il vino, aggiungi la passata e cuoci a fuoco basso per almeno 1 ora.',
-    'Preriscalda il forno a 180°C.',
-    'In una teglia, stendi un velo di besciamella sul fondo.',
-    'Alterna strati di sfoglie, ragù, besciamella e parmigiano per 4-5 volte.',
-    "Termina con besciamella abbondante, mozzarella e parmigiano.",
-    'Cuoci in forno per 35-40 minuti fino a doratura. Lascia riposare 10 min prima di servire.',
-  ],
-};
-
 export default function UrlRecipeScreen() {
   const router = useRouter();
-  const addRecipe = useRecipesStore((s) => s.addRecipe);
+  const queryClient = useQueryClient();
 
   const [url, setUrl] = useState('');
   const [state, setState] = useState<ScreenState>('input');
   const [urlError, setUrlError] = useState('');
+  const [extracted, setExtracted] = useState<ImportedRecipeDto | null>(null);
 
-  const handleImport = async () => {
+  const importMutation = useRecipesControllerImportFromUrl({
+    mutation: {
+      onSuccess: (data) => {
+        setExtracted(data);
+        setState('preview');
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.message || err?.message || 'Errore durante l\'importazione';
+        setUrlError(typeof msg === 'string' ? msg : 'Impossibile estrarre la ricetta da questo link.');
+        setState('input');
+      },
+    },
+  });
+
+  const createRecipe = useRecipesControllerCreate({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getRecipesControllerFindAllQueryKey() });
+        router.back();
+      },
+    },
+  });
+
+  const handleImport = () => {
     if (!url.trim()) {
       setUrlError('Inserisci un URL valido');
       return;
     }
     setUrlError('');
     setState('loading');
-    // Mock delay — simula l'estrazione dalla pagina web
-    await new Promise((r) => setTimeout(r, 2200));
-    setState('preview');
+    importMutation.mutate({ url: url.trim() });
   };
 
   const handleReset = () => {
     setState('input');
     setUrl('');
     setUrlError('');
+    setExtracted(null);
   };
 
   const handleSave = () => {
-    addRecipe(MOCK_EXTRACTED);
-    router.back();
+    if (!extracted) return;
+    createRecipe.mutate({
+      data: {
+        name: extracted.name,
+        description: extracted.description,
+        tags: extracted.tags,
+        servings: extracted.servings,
+        timeMinutes: extracted.timeMinutes,
+        rating: 0,
+        ingredients: extracted.ingredients,
+        steps: extracted.steps,
+      },
+    });
   };
 
   return (
@@ -103,7 +110,6 @@ export default function UrlRecipeScreen() {
             contentContainerClassName="px-4 py-5 gap-5"
             keyboardShouldPersistTaps="handled"
           >
-            {/* URL field */}
             <View className="gap-1.5">
               <Label nativeID="url">URL della ricetta</Label>
               <View className="flex-row items-center gap-2 border border-border rounded-md px-3 bg-background">
@@ -111,9 +117,9 @@ export default function UrlRecipeScreen() {
                 <Input
                   id="url"
                   className="flex-1 border-0 bg-transparent px-0"
-                  placeholder="https://www.esempio.com/ricetta/..."
+                  placeholder="https://www.giallozafferano.it/ricetta/..."
                   value={url}
-                  onChangeText={setUrl}
+                  onChangeText={(v) => { setUrl(v); setUrlError(''); }}
                   keyboardType="url"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -122,11 +128,13 @@ export default function UrlRecipeScreen() {
                 />
               </View>
               {urlError ? (
-                <Text className="text-destructive text-xs">{urlError}</Text>
+                <View className="flex-row items-center gap-1.5">
+                  <AlertCircle className="text-destructive" size={13} />
+                  <Text className="text-destructive text-xs flex-1">{urlError}</Text>
+                </View>
               ) : null}
             </View>
 
-            {/* Info box */}
             <Card>
               <CardContent className="pt-4 pb-4">
                 <Text className="text-sm font-semibold mb-1">Come funziona</Text>
@@ -138,7 +146,7 @@ export default function UrlRecipeScreen() {
               </CardContent>
             </Card>
 
-            <Button onPress={handleImport} className="mt-2">
+            <Button onPress={handleImport} className="flex-row gap-2 mt-2">
               <Globe className="text-primary-foreground" size={16} />
               <Text>Importa ricetta</Text>
             </Button>
@@ -164,12 +172,11 @@ export default function UrlRecipeScreen() {
         )}
 
         {/* Preview state */}
-        {state === 'preview' && (
+        {state === 'preview' && extracted && (
           <ScrollView
             contentContainerClassName="px-4 py-4 gap-4"
             showsVerticalScrollIndicator={false}
           >
-            {/* Success banner */}
             <View className="flex-row items-center gap-3 bg-primary/10 rounded-xl px-4 py-3 border border-primary/20">
               <CheckCircle2 className="text-primary" size={20} />
               <View className="flex-1">
@@ -178,60 +185,65 @@ export default function UrlRecipeScreen() {
               </View>
             </View>
 
-            {/* Recipe preview */}
             <Card>
               <CardContent className="pt-4 gap-3">
-                <Text className="text-lg font-bold">{MOCK_EXTRACTED.name}</Text>
-                <Text className="text-sm text-muted-foreground">{MOCK_EXTRACTED.description}</Text>
+                <Text className="text-lg font-bold">{extracted.name}</Text>
+                {extracted.description ? (
+                  <Text className="text-sm text-muted-foreground">{extracted.description}</Text>
+                ) : null}
 
                 <View className="flex-row gap-4">
                   <View className="flex-row items-center gap-1.5">
                     <Clock className="text-muted-foreground" size={13} />
-                    <Text className="text-xs text-muted-foreground">{MOCK_EXTRACTED.timeMinutes} min</Text>
+                    <Text className="text-xs text-muted-foreground">{extracted.timeMinutes} min</Text>
                   </View>
                   <View className="flex-row items-center gap-1.5">
                     <Users className="text-muted-foreground" size={13} />
-                    <Text className="text-xs text-muted-foreground">{MOCK_EXTRACTED.servings} pers.</Text>
+                    <Text className="text-xs text-muted-foreground">{extracted.servings} pers.</Text>
                   </View>
                 </View>
 
-                <View className="flex-row flex-wrap gap-1.5">
-                  {MOCK_EXTRACTED.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary">
-                      <Text className="capitalize">{tag}</Text>
-                    </Badge>
-                  ))}
-                </View>
+                {extracted.tags.length > 0 && (
+                  <View className="flex-row flex-wrap gap-1.5">
+                    {extracted.tags.map((tag) => (
+                      <Badge key={tag} variant="secondary">
+                        <Text className="capitalize text-xs">{tag}</Text>
+                      </Badge>
+                    ))}
+                  </View>
+                )}
 
                 <Separator />
 
                 <Text className="text-sm font-semibold">
-                  Ingredienti ({MOCK_EXTRACTED.ingredients.length})
+                  Ingredienti ({extracted.ingredients.length})
                 </Text>
-                {MOCK_EXTRACTED.ingredients.map((ing, i) => (
+                {extracted.ingredients.map((ing, i) => (
                   <View key={i} className="flex-row justify-between">
                     <Text className="text-sm flex-1">{ing.name}</Text>
                     <Text className="text-sm text-muted-foreground">{ing.amount}</Text>
                   </View>
                 ))}
 
-                <Separator />
-
-                <Text className="text-sm font-semibold">
-                  Procedimento ({MOCK_EXTRACTED.steps.length} passi)
-                </Text>
-                {MOCK_EXTRACTED.steps.map((step, i) => (
-                  <View key={i} className="flex-row gap-2">
-                    <Text className="text-xs font-bold text-primary w-4">{i + 1}.</Text>
-                    <Text className="text-sm text-muted-foreground flex-1">{step}</Text>
-                  </View>
-                ))}
+                {extracted.steps.length > 0 && (
+                  <>
+                    <Separator />
+                    <Text className="text-sm font-semibold">
+                      Procedimento ({extracted.steps.length} passi)
+                    </Text>
+                    {extracted.steps.map((step, i) => (
+                      <View key={i} className="flex-row gap-2">
+                        <Text className="text-xs font-bold text-primary w-4">{i + 1}.</Text>
+                        <Text className="text-sm text-muted-foreground flex-1">{step}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
               </CardContent>
             </Card>
 
-            {/* Actions */}
-            <Button onPress={handleSave}>
-              <Text>Salva ricetta</Text>
+            <Button onPress={handleSave} disabled={createRecipe.isPending}>
+              <Text>{createRecipe.isPending ? 'Salvataggio...' : 'Salva ricetta'}</Text>
             </Button>
             <Button variant="outline" onPress={handleReset} className="flex-row gap-2">
               <RotateCcw className="text-foreground" size={16} />

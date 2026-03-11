@@ -6,6 +6,7 @@
  */
 
 export * from "./assignRecipeDto";
+export * from "./importedRecipeDto";
 export * from "./bulkCheckDto";
 export * from "./createFavoriteDto";
 export * from "./createPantryItemDto";
