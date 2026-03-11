@@ -19,6 +19,7 @@ interface AddOption {
   description: string;
   icon: React.ReactNode;
   route: string;
+  comingSoon?: boolean;
 }
 
 export default function RecipesScreen() {
@@ -53,8 +54,9 @@ export default function RecipesScreen() {
       id: 'ai',
       label: "Chiedi all'AI",
       description: 'Descrivi cosa vuoi cucinare, ci pensa Claude',
-      icon: <Wand2 className="text-primary" size={22} />,
+      icon: <Wand2 className="text-muted-foreground" size={22} />,
       route: '/(auth)/recipe/new/ai',
+      comingSoon: true,
     },
   ];
 
@@ -218,17 +220,24 @@ export default function RecipesScreen() {
             {options.map((opt) => (
               <Pressable
                 key={opt.id}
-                onPress={() => handleOption(opt.route)}
-                className="active:opacity-80"
+                onPress={() => !opt.comingSoon && handleOption(opt.route)}
+                className={opt.comingSoon ? 'opacity-50' : 'active:opacity-80'}
               >
                 <Card>
                   <CardContent className="pt-4 pb-4">
                     <View className="flex-row items-center gap-4">
-                      <View className="w-12 h-12 rounded-xl bg-primary/10 items-center justify-center shrink-0">
+                      <View className={`w-12 h-12 rounded-xl items-center justify-center shrink-0 ${opt.comingSoon ? 'bg-muted' : 'bg-primary/10'}`}>
                         {opt.icon}
                       </View>
                       <View className="flex-1">
-                        <Text className="text-sm font-semibold">{opt.label}</Text>
+                        <View className="flex-row items-center gap-2">
+                          <Text className="text-sm font-semibold">{opt.label}</Text>
+                          {opt.comingSoon && (
+                            <Badge variant="secondary">
+                              <Text className="text-[10px]">Prossimamente</Text>
+                            </Badge>
+                          )}
+                        </View>
                         <Text className="text-xs text-muted-foreground mt-0.5">
                           {opt.description}
                         </Text>
