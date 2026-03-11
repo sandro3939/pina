@@ -75,8 +75,20 @@ export default function ShoppingScreen() {
 
   const toggleItem = useShoppingControllerToggleItem({
     mutation: {
+      onMutate: async ({ data }) => {
+        await queryClient.cancelQueries({ queryKey: getShoppingControllerGetQueryKey(weekKey) });
+        const previous = queryClient.getQueryData(getShoppingControllerGetQueryKey(weekKey));
+        queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), (old: typeof shoppingData) => {
+          if (!old) return old;
+          return { ...old, items: old.items.map((i) => i.id === data.itemId ? { ...i, checked: data.checked } : i) };
+        });
+        return { previous };
+      },
       onSuccess: (updated) => {
         queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), updated);
+      },
+      onError: (_err, _vars, context: any) => {
+        queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), context?.previous);
       },
     },
   });
@@ -99,8 +111,20 @@ export default function ShoppingScreen() {
 
   const toggleFavChecked = useShoppingControllerToggleFavChecked({
     mutation: {
+      onMutate: async ({ data }) => {
+        await queryClient.cancelQueries({ queryKey: getShoppingControllerGetQueryKey(weekKey) });
+        const previous = queryClient.getQueryData(getShoppingControllerGetQueryKey(weekKey));
+        queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), (old: typeof shoppingData) => {
+          if (!old) return old;
+          return { ...old, favCart: old.favCart.map((f) => f.favId === data.favId ? { ...f, checked: data.checked } : f) };
+        });
+        return { previous };
+      },
       onSuccess: (updated) => {
         queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), updated);
+      },
+      onError: (_err, _vars, context: any) => {
+        queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), context?.previous);
       },
     },
   });
