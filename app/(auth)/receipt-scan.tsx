@@ -84,7 +84,9 @@ export default function ReceiptScanScreen() {
 
       if (pickerResult.canceled || !pickerResult.assets[0]) return;
 
-      const imageUri = pickerResult.assets[0].uri;
+      const asset = pickerResult.assets[0];
+      const imageUri = asset.uri;
+      const mimeType = asset.mimeType ?? 'image/jpeg';
 
       setState('loading');
       setLoadingStep(0);
@@ -99,17 +101,20 @@ export default function ReceiptScanScreen() {
 
         // 3. Upload image to S3
         const imageBlob = await (await fetch(imageUri)).blob();
-        await fetch(uploadUrl, {
+        const uploadRes = await fetch(uploadUrl, {
           method: 'PUT',
           body: imageBlob,
-          headers: { 'Content-Type': 'image/jpeg' },
+          headers: { 'Content-Type': mimeType },
         });
+        if (!uploadRes.ok) {
+          throw new Error(`Caricamento immagine fallito (${uploadRes.status})`);
+        }
 
         clearInterval(stepTimer);
         setLoadingStep(3);
 
         // 4. Process receipt
-        processReceipt.mutate({ s3Key, weekKey });
+        processReceipt.mutate({ s3Key, weekKey, mimeType });
       } catch (err) {
         clearInterval(stepTimer);
         throw err;

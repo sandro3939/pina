@@ -6,6 +6,7 @@ export interface UploadUrlResponseDto {
 export interface ProcessReceiptDto {
   s3Key: string;
   weekKey?: string;
+  mimeType?: string;
 }
 
 export interface RecognizedItemDto {
