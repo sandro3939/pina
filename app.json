@@ -7,9 +7,11 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "icon": "./assets/images/icon.png",
     "splash": {
-      "resizeMode": "cover",
-      "backgroundColor": "#16a34a"
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#e35e1c"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -25,7 +27,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#16a34a"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#e35e1c"
       },
       "permissions": [
         "android.permission.INTERNET",
