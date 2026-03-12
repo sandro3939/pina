@@ -28,7 +28,10 @@
         "backgroundColor": "#16a34a"
       },
       "permissions": [
-        "android.permission.INTERNET"
+        "android.permission.INTERNET",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
       ],
       "edgeToEdgeEnabled": true,
       "jsEngine": "hermes",
@@ -37,6 +40,13 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Pina ha bisogno di accedere alle tue foto per scansionare gli scontrini.",
+          "cameraPermission": "Pina ha bisogno della fotocamera per scansionare gli scontrini della spesa."
+        }
+      ],
       [
         "expo-build-properties",
         {
