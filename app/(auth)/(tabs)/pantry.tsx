@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, ActivityIndicator, Modal, Animated } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Modal, Animated, Pressable } from 'react-native';
 import { useScreenEntrance } from '@/lib/hooks/useScreenEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -9,18 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { Search, Camera, Plus, Trash2, X } from 'lucide-react-native';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { Search, Camera, Plus, X, Trash2 } from 'lucide-react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   usePantryControllerGetAll,
@@ -114,40 +104,39 @@ export default function PantryScreen() {
 
   const renderRow = (item: typeof items[0], idx: number, total: number) => (
     <View key={item.itemId}>
-      <View className="flex-row items-center justify-between px-4 py-3">
-        <Text className="flex-1 text-sm">{item.name}</Text>
-        <View className="flex-row items-center gap-3">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button size="icon" variant="ghost" className="w-8 h-8">
-                <Trash2 className="text-muted-foreground/50" size={15} />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Rimuovi dalla dispensa</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Vuoi rimuovere "{item.name}" dalla dispensa?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel asChild>
-                  <Button variant="outline"><Text>Annulla</Text></Button>
-                </AlertDialogCancel>
-                <AlertDialogAction asChild>
-                  <Button variant="destructive" onPress={() => removeItem.mutate({ itemId: item.itemId })}>
-                    <Text>Rimuovi</Text>
-                  </Button>
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+      <Swipeable
+        renderRightActions={(progress) => {
+          const scale = progress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.5, 1],
+            extrapolate: 'clamp',
+          });
+          const opacity = progress.interpolate({
+            inputRange: [0, 0.6, 1],
+            outputRange: [0, 0.7, 1],
+            extrapolate: 'clamp',
+          });
+          return (
+            <Pressable
+              onPress={() => removeItem.mutate({ itemId: item.itemId })}
+              className="bg-destructive items-center justify-center w-20 active:opacity-80"
+            >
+              <Animated.View style={{ opacity, transform: [{ scale }] }}>
+                <Trash2 size={18} color="white" />
+              </Animated.View>
+            </Pressable>
+          );
+        }}
+        overshootRight={false}
+      >
+        <View className="flex-row items-center justify-between px-4 py-3 bg-card">
+          <Text className="flex-1 text-sm">{item.name}</Text>
           <Switch
             checked={item.inStock}
             onCheckedChange={() => handleToggle(item.itemId, item.inStock)}
           />
         </View>
-      </View>
+      </Swipeable>
       {idx < total - 1 && <Separator className="ml-4" />}
     </View>
   );

@@ -1,11 +1,30 @@
 import { cn } from '@/lib/utils';
 import * as SwitchPrimitives from '@rn-primitives/switch';
-import { Platform } from 'react-native';
+import { Platform, Animated } from 'react-native';
+import { useRef, useEffect } from 'react';
 
 function Switch({
   className,
   ...props
 }: SwitchPrimitives.RootProps & React.RefAttributes<SwitchPrimitives.RootRef>) {
+  const translateX = useRef(new Animated.Value(props.checked ? 14 : 0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(translateX, {
+        toValue: props.checked ? 14 : 0,
+        useNativeDriver: true,
+        speed: 40,
+        bounciness: 8,
+      }),
+      Animated.sequence([
+        Animated.timing(scale, { toValue: 1.2, duration: 80, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, speed: 40, bounciness: 6, useNativeDriver: true }),
+      ]),
+    ]).start();
+  }, [props.checked]);
+
   return (
     <SwitchPrimitives.Root
       className={cn(
@@ -17,20 +36,17 @@ function Switch({
         props.disabled && 'opacity-50',
         className
       )}
-      {...props}>
-      <SwitchPrimitives.Thumb
+      {...props}
+    >
+      <Animated.View
         className={cn(
           'bg-background size-4 rounded-full',
-          Platform.select({
-            web: 'pointer-events-none block ring-0 transition-transform',
-          }),
           props.checked ? 'dark:bg-primary-foreground' : 'dark:bg-foreground',
         )}
-        style={{ transform: [{ translateX: props.checked ? 14 : 0 }] }}
+        style={{ transform: [{ translateX }, { scale }] as any }}
       />
     </SwitchPrimitives.Root>
   );
 }
 
 export { Switch };
-
