@@ -48,12 +48,12 @@ module.exports = {
         },
       },
       borderRadius: {
-        sm:    '0.25rem',   //  4px — badge ornaments, tiny chips
-        md:    '0.5rem',    //  8px — small interactive elements
-        lg:    '0.75rem',   // 12px — inputs, secondary buttons
-        xl:    '1rem',      // 16px — cards, primary buttons
-        '2xl': '1.25rem',   // 20px — bottom sheets, modals
-        '3xl': '1.5rem',    // 24px — hero/feature elements
+        sm:    '0.5rem',    //  8px — badge ornaments, tiny chips
+        md:    '0.875rem',  // 14px — small interactive elements
+        lg:    '1.25rem',   // 20px — inputs, secondary buttons
+        xl:    '1.5rem',    // 24px — cards, primary buttons
+        '2xl': '1.75rem',   // 28px — bottom sheets, modals
+        '3xl': '2rem',      // 32px — hero/feature elements
         full:  '9999px',    // pill — badges, tags
       },
     },

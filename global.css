@@ -41,7 +41,7 @@
     --ring: 152 52% 35%;
 
     /* Base radius */
-    --radius: 0.75rem;
+    --radius: 1.25rem;
   }
 
   .dark:root {
