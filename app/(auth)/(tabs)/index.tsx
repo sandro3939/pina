@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, ScrollView, Pressable, Modal, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Pressable, Modal, ActivityIndicator, Animated } from 'react-native';
+import { useScreenEntrance } from '@/lib/hooks/useScreenEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
@@ -100,6 +101,8 @@ export default function PlannerScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [weekOffset, setWeekOffset] = useState(0);
+
+  const entrance = useScreenEntrance();
   const [pickerSlot, setPickerSlot] = useState<PickerSlot | null>(null);
   const [pickerSearch, setPickerSearch] = useState('');
 
@@ -190,6 +193,7 @@ export default function PlannerScreen() {
   );
 
   return (
+    <Animated.View style={entrance.style}>
     <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-background">
       <ScrollView contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
 
@@ -485,5 +489,6 @@ export default function PlannerScreen() {
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+    </Animated.View>
   );
 }

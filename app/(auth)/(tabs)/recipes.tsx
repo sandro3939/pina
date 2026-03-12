@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, ScrollView, Pressable, Modal, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Pressable, Modal, ActivityIndicator, Animated } from 'react-native';
+import { useScreenEntrance } from '@/lib/hooks/useScreenEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,7 @@ export default function RecipesScreen() {
   const { data: recipes = [], isLoading } = useRecipesControllerFindAll();
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState('tutti');
+  const entrance = useScreenEntrance();
   const [addModalVisible, setAddModalVisible] = useState(false);
 
   const filtered = recipes.filter((r) => {
@@ -66,6 +68,7 @@ export default function RecipesScreen() {
   };
 
   return (
+    <Animated.View style={entrance.style}>
     <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-background">
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 pt-4 pb-3">
@@ -251,5 +254,6 @@ export default function RecipesScreen() {
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+    </Animated.View>
   );
 }

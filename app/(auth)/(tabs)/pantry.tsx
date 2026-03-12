@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, ScrollView, ActivityIndicator, Modal } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Modal, Animated } from 'react-native';
+import { useScreenEntrance } from '@/lib/hooks/useScreenEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
@@ -32,6 +33,7 @@ import {
 export default function PantryScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const entrance = useScreenEntrance();
   const [search, setSearch] = useState('');
   const [addModal, setAddModal] = useState(false);
   const [newName, setNewName] = useState('');
@@ -159,6 +161,7 @@ export default function PantryScreen() {
   }
 
   return (
+    <Animated.View style={entrance.style}>
     <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-background">
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 pt-4 pb-3">
@@ -275,5 +278,6 @@ export default function PantryScreen() {
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+    </Animated.View>
   );
 }

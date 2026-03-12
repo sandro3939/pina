@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, ScrollView, Pressable, Modal } from 'react-native';
+import { View, ScrollView, Pressable, Modal, Animated } from 'react-native';
+import { useScreenEntrance } from '@/lib/hooks/useScreenEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
@@ -57,6 +58,7 @@ export default function ShoppingScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const weekKey = getWeekKey(0);
+  const entrance = useScreenEntrance();
 
   const [favExpanded, setFavExpanded] = useState(true);
   const [addFavModal, setAddFavModal] = useState(false);
@@ -174,6 +176,7 @@ export default function ShoppingScreen() {
   };
 
   return (
+    <Animated.View style={entrance.style}>
     <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-background">
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 pt-4 pb-3">
@@ -487,5 +490,6 @@ export default function ShoppingScreen() {
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+    </Animated.View>
   );
 }
