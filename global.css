@@ -6,39 +6,39 @@
   :root {
     /* ── Pina – Light Mode ──────────────────────────────────── */
 
-    /* Backgrounds */
-    --background: 36 25% 98%;          /* warm off-white */
-    --foreground: 24 10% 10%;          /* warm near-black — slightly deeper */
+    /* Backgrounds – warm cream */
+    --background: 38 30% 97%;
+    --foreground: 22 18% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 24 10% 10%;
+    --card-foreground: 22 18% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 24 10% 10%;
+    --popover-foreground: 22 18% 12%;
 
-    /* Primary – Sage Green */
-    --primary: 152 52% 35%;
+    /* Primary – Terracotta */
+    --primary: 20 78% 50%;
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary – light green tint */
-    --secondary: 152 38% 92%;
-    --secondary-foreground: 152 44% 26%;
+    /* Secondary – light terracotta tint */
+    --secondary: 20 60% 93%;
+    --secondary-foreground: 20 65% 30%;
 
-    /* Muted – warm neutral grey (lighter foreground = better hierarchy) */
-    --muted: 36 14% 94%;
-    --muted-foreground: 36 7% 50%;     /* was 46% — less muddy, more airy */
+    /* Muted – warm parchment */
+    --muted: 36 18% 93%;
+    --muted-foreground: 30 8% 48%;
 
-    /* Accent */
-    --accent: 152 28% 91%;
-    --accent-foreground: 24 10% 10%;
+    /* Accent – warm amber glow */
+    --accent: 32 70% 92%;
+    --accent-foreground: 22 18% 12%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Surfaces (sharper borders = more visual definition) */
-    --border: 36 14% 86%;              /* was 89% — more visible */
-    --input: 36 14% 86%;
-    --ring: 152 52% 35%;
+    /* Surfaces */
+    --border: 34 16% 85%;
+    --input: 34 16% 85%;
+    --ring: 20 78% 50%;
 
     /* Base radius */
     --radius: 1.25rem;
@@ -47,32 +47,33 @@
   .dark:root {
     /* ── Pina – Dark Mode ──────────────────────────────────── */
 
-    --background: 20 8% 8%;            /* slightly deeper */
-    --foreground: 36 8% 95%;
+    --background: 22 12% 7%;
+    --foreground: 36 10% 94%;
 
-    --card: 20 8% 11%;                 /* slightly deeper */
-    --card-foreground: 36 8% 95%;
+    --card: 22 12% 10%;
+    --card-foreground: 36 10% 94%;
 
-    --popover: 20 8% 14%;
-    --popover-foreground: 36 8% 95%;
+    --popover: 22 12% 13%;
+    --popover-foreground: 36 10% 94%;
 
-    --primary: 152 58% 44%;
+    /* Primary – slightly lighter terracotta for dark bg */
+    --primary: 20 72% 58%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 20 8% 18%;
-    --secondary-foreground: 152 42% 72%;
+    --secondary: 22 12% 17%;
+    --secondary-foreground: 20 60% 75%;
 
-    --muted: 20 8% 15%;
-    --muted-foreground: 20 5% 52%;     /* slightly lighter */
+    --muted: 22 12% 14%;
+    --muted-foreground: 24 6% 52%;
 
-    --accent: 20 8% 18%;
-    --accent-foreground: 36 8% 95%;
+    --accent: 22 12% 17%;
+    --accent-foreground: 36 10% 94%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 20 8% 22%;               /* was 21% — slightly more visible */
-    --input: 20 8% 22%;
-    --ring: 152 58% 44%;
+    --border: 22 12% 20%;
+    --input: 22 12% 20%;
+    --ring: 20 72% 58%;
   }
 }
