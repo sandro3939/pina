@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, Animated } from 'react-native';
+import { useRef, useEffect } from 'react';
 import { Home, BookOpen, ShoppingCart, Package } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +20,58 @@ type TabBarProps = {
   navigation: { navigate: (name: string) => void; emit: (e: { type: string; target: string; canPreventDefault?: boolean }) => { defaultPrevented: boolean } };
 };
 
+type AnimatedTabProps = {
+  isActive: boolean;
+  label: string;
+  Icon: React.ComponentType<{ size: number; color: string }>;
+  theme: (typeof THEME)['light'];
+  onPress: () => void;
+};
+
+function AnimatedTab({ isActive, label, Icon, theme, onPress }: AnimatedTabProps) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (isActive) {
+      Animated.sequence([
+        Animated.timing(scale, {
+          toValue: 1.25,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scale, {
+          toValue: 1,
+          useNativeDriver: true,
+          speed: 40,
+          bounciness: 8,
+        }),
+      ]).start();
+    }
+  }, [isActive]);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      className="flex-1 items-center active:opacity-70"
+      style={{ paddingVertical: 8, gap: 4 }}
+    >
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <Icon
+          size={isActive ? 24 : 20}
+          color={isActive ? theme.primary : theme.mutedForeground}
+        />
+      </Animated.View>
+
+      <Text
+        className={cn(isActive ? 'font-bold text-[11px]' : 'text-muted-foreground text-[10px]')}
+        style={isActive ? { color: theme.primary } : undefined}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 function CustomTabBar({ state, navigation }: TabBarProps) {
   const { colorScheme } = useColorScheme();
   const theme = THEME[colorScheme ?? 'light'];
@@ -27,16 +80,17 @@ function CustomTabBar({ state, navigation }: TabBarProps) {
   return (
     <View
       className="bg-background"
-      style={{ paddingTop: 4, paddingBottom: insets.bottom }}
+      style={{ paddingTop: 6, paddingBottom: insets.bottom || 12, paddingHorizontal: 16 }}
     >
       <View
-        className="mx-3 flex-row bg-card rounded-2xl border border-border"
+        className="flex-row bg-card rounded-3xl"
         style={{
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -1 },
-          shadowOpacity: colorScheme === 'dark' ? 0.25 : 0.07,
-          shadowRadius: 10,
-          elevation: 8,
+          shadowColor: theme.primary,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: colorScheme === 'dark' ? 0.2 : 0.12,
+          shadowRadius: 16,
+          elevation: 10,
+          padding: 6,
         }}
       >
         {state.routes.map((route, index) => {
@@ -58,34 +112,14 @@ function CustomTabBar({ state, navigation }: TabBarProps) {
           };
 
           return (
-            <Pressable
+            <AnimatedTab
               key={route.key}
+              isActive={isActive}
+              label={label}
+              Icon={Icon}
+              theme={theme}
               onPress={onPress}
-              className="flex-1 items-center py-2 gap-0.5 active:opacity-60"
-            >
-              {/* Icona con pill di sfondo se attiva */}
-              <View
-                className={cn(
-                  'rounded-xl px-3 py-1',
-                  isActive ? 'bg-primary/10' : 'bg-transparent',
-                )}
-              >
-                <Icon
-                  size={20}
-                  color={isActive ? theme.primary : theme.mutedForeground}
-                />
-              </View>
-
-              {/* Label */}
-              <Text
-                className={cn(
-                  'text-[10px]',
-                  isActive ? 'text-primary font-semibold' : 'text-muted-foreground',
-                )}
-              >
-                {label}
-              </Text>
-            </Pressable>
+            />
           );
         })}
       </View>
