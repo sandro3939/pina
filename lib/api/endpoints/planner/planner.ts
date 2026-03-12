@@ -36,14 +36,14 @@ export const plannerControllerGetWeek = (
   signal?: AbortSignal,
 ) => {
   return customInstance<PlannerControllerGetWeek200>({
-    url: `/planner/${weekKey}`,
+    url: `/pina/planner/${weekKey}`,
     method: "GET",
     signal,
   });
 };
 
 export const getPlannerControllerGetWeekQueryKey = (weekKey?: string) => {
-  return [`/planner/${weekKey}`] as const;
+  return [`/pina/planner/${weekKey}`] as const;
 };
 
 export const getPlannerControllerGetWeekQueryOptions = <
@@ -205,7 +205,7 @@ export const plannerControllerAssign = (
   assignRecipeDto: AssignRecipeDto,
 ) => {
   return customInstance<PlanSlotResponseDto>({
-    url: `/planner/${weekKey}/${dayIndex}/${meal}/${course}`,
+    url: `/pina/planner/${weekKey}/${dayIndex}/${meal}/${course}`,
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     data: assignRecipeDto,
@@ -321,7 +321,7 @@ export const plannerControllerRemove = (
   course: string,
 ) => {
   return customInstance<PlanSlotResponseDto>({
-    url: `/planner/${weekKey}/${dayIndex}/${meal}/${course}`,
+    url: `/pina/planner/${weekKey}/${dayIndex}/${meal}/${course}`,
     method: "DELETE",
   });
 };

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, Pressable, Modal, ActivityIndicator, Animated } from 'react-native';
+import { View, ScrollView, Pressable, Modal, ActivityIndicator, Animated, RefreshControl } from 'react-native';
 import { useScreenEntrance } from '@/lib/hooks/useScreenEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
@@ -31,6 +31,25 @@ const MONTHS = [
   'gen', 'feb', 'mar', 'apr', 'mag', 'giu',
   'lug', 'ago', 'set', 'ott', 'nov', 'dic',
 ];
+
+const MONTHS_LONG = [
+  'gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+  'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre',
+];
+
+const DAYS_LONG = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Buongiorno Pina 🌤';
+  if (h < 18) return 'Buon pomeriggio Pina ☀️';
+  return 'Buonasera Pina 🌙';
+}
+
+function todayLabel(): string {
+  const d = new Date();
+  return `${DAYS_LONG[d.getDay()]} ${d.getDate()} ${MONTHS_LONG[d.getMonth()]}`;
+}
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 
 function getWeekStart(offset: number): Date {
@@ -112,9 +131,9 @@ export default function PlannerScreen() {
 
   const weekKey = getWeekKey(weekOffset);
 
-  const { data: slotsRecord = {}, isLoading: plannerLoading } =
+  const { data: slotsRecord = {}, isLoading: plannerLoading, refetch: refetchPlanner } =
     usePlannerControllerGetWeek(weekKey);
-  const { data: allRecipes = [] } = useRecipesControllerFindAll();
+  const { data: allRecipes = [], refetch: refetchRecipes } = useRecipesControllerFindAll();
 
   const generateShopping = useShoppingControllerGenerate({
     mutation: {
@@ -164,6 +183,12 @@ export default function PlannerScreen() {
   const weekLabel = `${first.getDate()} ${MONTHS[first.getMonth()]} — ${last.getDate()} ${MONTHS[last.getMonth()]}`;
 
   const currentPlan = parsePlannerData(slotsRecord);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([refetchPlanner(), refetchRecipes()]);
+    setIsRefreshing(false);
+  };
 
   const openPicker = (dayIndex: number, meal: 'pranzo' | 'cena', course: 'primo' | 'secondo') => {
     setPickerSlot({ dayIndex, meal, course });
@@ -199,13 +224,20 @@ export default function PlannerScreen() {
   return (
     <Animated.View style={entrance.style}>
     <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-background">
-      <ScrollView contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerClassName="pb-6"
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+      >
 
         {/* Header */}
         <View className="px-4 pt-4 pb-3 gap-3">
           {/* Title row */}
           <View className="flex-row items-center justify-between">
-            <Text variant="h3">Settimana</Text>
+            <View>
+              <Text variant="h3">{greeting()}</Text>
+              <Text className="text-xs text-muted-foreground mt-0.5">{todayLabel()}</Text>
+            </View>
             <Button
               size="sm"
               variant="outline"

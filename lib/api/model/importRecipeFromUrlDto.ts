@@ -5,8 +5,6 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface CreatePantryItemDto {
-  name: string;
-  category?: string;
-  inStock?: boolean;
+export interface ImportRecipeFromUrlDto {
+  url: string;
 }

@@ -22,6 +22,7 @@ import type {
 
 import type {
   CreateRecipeDto,
+  ImportRecipeFromUrlDto,
   ImportedRecipeDto,
   RecipesControllerRemove200,
   ResponseRecipeDto,
@@ -31,18 +32,104 @@ import type {
 import { customInstance } from "../../axios-instance";
 
 /**
+ * @summary Estrai ricetta da URL (JSON-LD)
+ */
+export const recipesControllerImportFromUrl = (
+  importRecipeFromUrlDto: ImportRecipeFromUrlDto,
+  signal?: AbortSignal,
+) => {
+  return customInstance<ImportedRecipeDto>({
+    url: `/pina/recipes/import-url`,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    data: importRecipeFromUrlDto,
+    signal,
+  });
+};
+
+export const getRecipesControllerImportFromUrlMutationOptions = <
+  TError = unknown,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recipesControllerImportFromUrl>>,
+    TError,
+    { data: ImportRecipeFromUrlDto },
+    TContext
+  >;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recipesControllerImportFromUrl>>,
+  TError,
+  { data: ImportRecipeFromUrlDto },
+  TContext
+> => {
+  const mutationKey = ["recipesControllerImportFromUrl"];
+  const { mutation: mutationOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recipesControllerImportFromUrl>>,
+    { data: ImportRecipeFromUrlDto }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return recipesControllerImportFromUrl(data);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecipesControllerImportFromUrlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recipesControllerImportFromUrl>>
+>;
+export type RecipesControllerImportFromUrlMutationBody = ImportRecipeFromUrlDto;
+export type RecipesControllerImportFromUrlMutationError = unknown;
+
+/**
+ * @summary Estrai ricetta da URL (JSON-LD)
+ */
+export const useRecipesControllerImportFromUrl = <
+  TError = unknown,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof recipesControllerImportFromUrl>>,
+      TError,
+      { data: ImportRecipeFromUrlDto },
+      TContext
+    >;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof recipesControllerImportFromUrl>>,
+  TError,
+  { data: ImportRecipeFromUrlDto },
+  TContext
+> => {
+  const mutationOptions =
+    getRecipesControllerImportFromUrlMutationOptions(options);
+
+  return useMutation(mutationOptions, queryClient);
+};
+/**
  * @summary Tutte le ricette della famiglia
  */
 export const recipesControllerFindAll = (signal?: AbortSignal) => {
   return customInstance<ResponseRecipeDto[]>({
-    url: `/recipes`,
+    url: `/pina/recipes`,
     method: "GET",
     signal,
   });
 };
 
 export const getRecipesControllerFindAllQueryKey = () => {
-  return [`/recipes`] as const;
+  return [`/pina/recipes`] as const;
 };
 
 export const getRecipesControllerFindAllQueryOptions = <
@@ -186,7 +273,7 @@ export const recipesControllerCreate = (
   signal?: AbortSignal,
 ) => {
   return customInstance<ResponseRecipeDto>({
-    url: `/recipes`,
+    url: `/pina/recipes`,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     data: createRecipeDto,
@@ -271,14 +358,14 @@ export const recipesControllerFindOne = (
   signal?: AbortSignal,
 ) => {
   return customInstance<ResponseRecipeDto>({
-    url: `/recipes/${recipeId}`,
+    url: `/pina/recipes/${recipeId}`,
     method: "GET",
     signal,
   });
 };
 
 export const getRecipesControllerFindOneQueryKey = (recipeId?: string) => {
-  return [`/recipes/${recipeId}`] as const;
+  return [`/pina/recipes/${recipeId}`] as const;
 };
 
 export const getRecipesControllerFindOneQueryOptions = <
@@ -437,7 +524,7 @@ export const recipesControllerUpdate = (
   updateRecipeDto: UpdateRecipeDto,
 ) => {
   return customInstance<ResponseRecipeDto>({
-    url: `/recipes/${recipeId}`,
+    url: `/pina/recipes/${recipeId}`,
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     data: updateRecipeDto,
@@ -518,7 +605,7 @@ export const useRecipesControllerUpdate = <
  */
 export const recipesControllerRemove = (recipeId: string) => {
   return customInstance<RecipesControllerRemove200>({
-    url: `/recipes/${recipeId}`,
+    url: `/pina/recipes/${recipeId}`,
     method: "DELETE",
   });
 };
@@ -591,39 +678,4 @@ export const useRecipesControllerRemove = <
   const mutationOptions = getRecipesControllerRemoveMutationOptions(options);
 
   return useMutation(mutationOptions, queryClient);
-};
-
-// ── Import from URL (manually added) ─────────────────────────────────────────
-
-export const recipesControllerImportFromUrl = (url: string) => {
-  return customInstance<ImportedRecipeDto>({
-    url: `/recipes/import-url`,
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    data: { url },
-  });
-};
-
-export const useRecipesControllerImportFromUrl = <
-  TError = unknown,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof recipesControllerImportFromUrl>>,
-    TError,
-    { url: string },
-    TContext
-  >;
-}, queryClient?: QueryClient): UseMutationResult<
-  Awaited<ReturnType<typeof recipesControllerImportFromUrl>>,
-  TError,
-  { url: string },
-  TContext
-> => {
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof recipesControllerImportFromUrl>>,
-    { url: string }
-  > = ({ url }) => recipesControllerImportFromUrl(url);
-
-  return useMutation({ mutationFn, ...options?.mutation }, queryClient);
 };

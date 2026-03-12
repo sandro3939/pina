@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { View, ScrollView, Modal, Pressable, ActivityIndicator } from 'react-native';
+import Svg, { Defs, Pattern, Circle, Rect } from 'react-native-svg';
+import { useColorScheme } from 'nativewind';
+import { THEME } from '@/lib/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
@@ -60,6 +63,8 @@ export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { colorScheme } = useColorScheme();
+  const primary = THEME[colorScheme ?? 'light'].primary;
 
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -183,10 +188,24 @@ export default function RecipeDetailScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
-      <ScrollView contentContainerClassName="pb-12" showsVerticalScrollIndicator={false}>
-        {/* Hero + back button */}
-        <View className="h-48 bg-primary/15 items-start justify-end px-4 pb-4">
+    <View className="flex-1 bg-background">
+      {/* Absolute hero color — extends behind status bar */}
+      <View className="absolute top-0 left-0 right-0 bg-primary/15" style={{ height: 300 }} />
+      <SafeAreaView edges={['top', 'left', 'right']} className="flex-1">
+      {/* Hero + back button */}
+      <View className="h-48 items-start justify-end px-4 pb-4">
+          {/* Dot grid texture */}
+          <View className="absolute inset-0 overflow-hidden">
+            <Svg width="100%" height="100%">
+              <Defs>
+                <Pattern id="dots" x="0" y="0" width="18" height="18" patternUnits="userSpaceOnUse">
+                  <Circle cx="2" cy="2" r="1.2" fill={primary} fillOpacity="0.25" />
+                </Pattern>
+              </Defs>
+              <Rect width="100%" height="100%" fill="url(#dots)" />
+            </Svg>
+          </View>
+
           <Button
             size="icon"
             variant="outline"
@@ -262,6 +281,7 @@ export default function RecipeDetailScreen() {
           </View>
         </View>
 
+        <ScrollView className="flex-1 bg-background rounded-t-3xl" contentContainerClassName="pb-12" showsVerticalScrollIndicator={false}>
         <View className="px-4 pt-5">
           {/* Title + rating */}
           <View className="flex-row items-start justify-between gap-2">
@@ -337,7 +357,8 @@ export default function RecipeDetailScreen() {
             <Text>Aggiungi al planner</Text>
           </Button>
         </View>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
 
       {/* ── Planner Picker Modal ─────────────────────────────────── */}
       <Modal
@@ -487,6 +508,6 @@ export default function RecipeDetailScreen() {
           </View>
         </SafeAreaView>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }

@@ -1,6 +1,5 @@
-// TODO: replace with your Cognito User Pool credentials
 export const cognitoConfig = {
-  userPoolId: 'eu-west-1_XXXXXXXXX',
-  clientId: 'XXXXXXXXXXXXXXXXXXXXXXXXXX',
-  region: 'eu-west-1',
+  userPoolId: 'eu-south-2_9yCZo9MLL',
+  clientId: '19rgddbg3n62nugm9bu3dqtcte',
+  region: 'eu-south-2',
 };

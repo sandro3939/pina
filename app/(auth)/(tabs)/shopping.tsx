@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, Pressable, Modal, Animated } from 'react-native';
+import { View, ScrollView, Pressable, Modal, Animated, RefreshControl } from 'react-native';
 import { useScreenEntrance } from '@/lib/hooks/useScreenEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import {
   Check,
   RefreshCcw,
@@ -18,6 +19,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Trash2,
 } from 'lucide-react-native';
 import { cn } from '@/lib/utils';
 import { getISOWeek, getISOWeekYear } from 'date-fns';
@@ -33,6 +35,7 @@ import {
 import {
   useFavoritesControllerGetAll,
   useFavoritesControllerCreate,
+  useFavoritesControllerRemove,
   getFavoritesControllerGetAllQueryKey,
 } from '@/lib/api/endpoints/favorites/favorites';
 import { usePantryControllerGetAll } from '@/lib/api/endpoints/pantry/pantry';
@@ -65,11 +68,18 @@ export default function ShoppingScreen() {
   const [newFavName, setNewFavName] = useState('');
   const [newFavQty, setNewFavQty] = useState('');
 
-  const { data: shoppingData } = useShoppingControllerGet(weekKey, {
+  const { data: shoppingData, refetch: refetchShopping } = useShoppingControllerGet(weekKey, {
     query: { refetchInterval: 4000 },
   });
-  const { data: allFavorites = [] } = useFavoritesControllerGetAll();
-  const { data: pantryItems = [] } = usePantryControllerGetAll();
+  const { data: allFavorites = [], refetch: refetchFavorites } = useFavoritesControllerGetAll();
+  const { data: pantryItems = [], refetch: refetchPantry } = usePantryControllerGetAll();
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([refetchShopping(), refetchFavorites(), refetchPantry()]);
+    setIsRefreshing(false);
+  };
 
   const items = shoppingData?.items ?? [];
   const favCart = shoppingData?.favCart ?? [];
@@ -92,6 +102,9 @@ export default function ShoppingScreen() {
       onError: (_err, _vars, context: any) => {
         queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), context?.previous);
       },
+      onSettled: () => {
+        queryClient.invalidateQueries({ queryKey: getShoppingControllerGetQueryKey(weekKey) });
+      },
     },
   });
 
@@ -105,8 +118,26 @@ export default function ShoppingScreen() {
 
   const toggleFavCart = useShoppingControllerToggleFavCart({
     mutation: {
+      onMutate: async ({ data }) => {
+        await queryClient.cancelQueries({ queryKey: getShoppingControllerGetQueryKey(weekKey) });
+        const previous = queryClient.getQueryData(getShoppingControllerGetQueryKey(weekKey));
+        queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), (old: typeof shoppingData) => {
+          if (!old) return old;
+          if (data.inCart) {
+            return { ...old, favCart: [...old.favCart, { favId: data.favId, checked: false }] };
+          }
+          return { ...old, favCart: old.favCart.filter((f) => f.favId !== data.favId) };
+        });
+        return { previous };
+      },
       onSuccess: (updated) => {
         queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), updated);
+      },
+      onError: (_err, _vars, context: any) => {
+        queryClient.setQueryData(getShoppingControllerGetQueryKey(weekKey), context?.previous);
+      },
+      onSettled: () => {
+        queryClient.invalidateQueries({ queryKey: getShoppingControllerGetQueryKey(weekKey) });
       },
     },
   });
@@ -133,10 +164,39 @@ export default function ShoppingScreen() {
 
   const createFavorite = useFavoritesControllerCreate({
     mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({
-          queryKey: getFavoritesControllerGetAllQueryKey(),
-        });
+      onMutate: async ({ data }) => {
+        await queryClient.cancelQueries({ queryKey: getFavoritesControllerGetAllQueryKey() });
+        const previous = queryClient.getQueryData(getFavoritesControllerGetAllQueryKey());
+        queryClient.setQueryData(getFavoritesControllerGetAllQueryKey(), (old: any[]) => [
+          ...(old ?? []),
+          { favId: `temp-${Date.now()}`, name: data.name, defaultQty: data.defaultQty ?? '1 pz', category: data.category ?? 'Snack' },
+        ]);
+        return { previous };
+      },
+      onError: (_err, _vars, context: any) => {
+        queryClient.setQueryData(getFavoritesControllerGetAllQueryKey(), context?.previous);
+      },
+      onSettled: () => {
+        queryClient.invalidateQueries({ queryKey: getFavoritesControllerGetAllQueryKey() });
+      },
+    },
+  });
+
+  const removeFavorite = useFavoritesControllerRemove({
+    mutation: {
+      onMutate: async ({ favId }) => {
+        await queryClient.cancelQueries({ queryKey: getFavoritesControllerGetAllQueryKey() });
+        const previous = queryClient.getQueryData(getFavoritesControllerGetAllQueryKey());
+        queryClient.setQueryData(getFavoritesControllerGetAllQueryKey(), (old: any[]) =>
+          (old ?? []).filter((f) => f.favId !== favId),
+        );
+        return { previous };
+      },
+      onError: (_err, _vars, context: any) => {
+        queryClient.setQueryData(getFavoritesControllerGetAllQueryKey(), context?.previous);
+      },
+      onSettled: () => {
+        queryClient.invalidateQueries({ queryKey: getFavoritesControllerGetAllQueryKey() });
       },
     },
   });
@@ -221,7 +281,7 @@ export default function ShoppingScreen() {
 
       <Separator />
 
-      <ScrollView contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerClassName="pb-6" showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}>
         {/* ── Lista da ricette ──────────────────────────────────── */}
         {shoppingCategories.map((category) => {
           const catItems = items.filter((i) => i.category === category);
@@ -374,72 +434,98 @@ export default function ShoppingScreen() {
 
                   return (
                     <View key={fav.favId}>
-                      <View
-                        className={cn(
-                          'flex-row items-center gap-3 px-4 py-3.5',
-                          isCheckedFav && 'opacity-50',
-                        )}
+                      <Swipeable
+                        renderRightActions={(progress) => {
+                          const scale = progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.5, 1],
+                            extrapolate: 'clamp',
+                          });
+                          const opacity = progress.interpolate({
+                            inputRange: [0, 0.6, 1],
+                            outputRange: [0, 0.7, 1],
+                            extrapolate: 'clamp',
+                          });
+                          return (
+                            <Pressable
+                              onPress={() => removeFavorite.mutate({ favId: fav.favId })}
+                              className="bg-destructive items-center justify-center w-20 active:opacity-80"
+                            >
+                              <Animated.View style={{ opacity, transform: [{ scale }] }}>
+                                <Trash2 size={18} color="white" />
+                              </Animated.View>
+                            </Pressable>
+                          );
+                        }}
+                        overshootRight={false}
                       >
-                        {/* Checkbox — attivo solo se in cart */}
-                        <Pressable
-                          onPress={() =>
-                            isInCartFav &&
-                            toggleFavChecked.mutate({
-                              weekKey,
-                              data: { favId: fav.favId, checked: !isCheckedFav },
-                            })
-                          }
-                          disabled={!isInCartFav}
+                        <View
+                          className={cn(
+                            'flex-row items-center gap-3 px-4 py-3.5 bg-card',
+                            isCheckedFav && 'opacity-50',
+                          )}
                         >
-                          <View
+                          {/* Checkbox — attivo solo se in cart */}
+                          <Pressable
+                            onPress={() =>
+                              isInCartFav &&
+                              toggleFavChecked.mutate({
+                                weekKey,
+                                data: { favId: fav.favId, checked: !isCheckedFav },
+                              })
+                            }
+                            disabled={!isInCartFav}
+                          >
+                            <View
+                              className={cn(
+                                'w-5 h-5 rounded-md border-2 items-center justify-center shrink-0',
+                                isCheckedFav
+                                  ? 'bg-primary border-primary'
+                                  : isInCartFav
+                                    ? 'border-border bg-background'
+                                    : 'border-muted-foreground/20 bg-muted/30',
+                              )}
+                            >
+                              {isCheckedFav && (
+                                <Check className="text-primary-foreground" size={12} />
+                              )}
+                            </View>
+                          </Pressable>
+
+                          {/* Nome */}
+                          <Text
                             className={cn(
-                              'w-5 h-5 rounded-md border-2 items-center justify-center shrink-0',
-                              isCheckedFav
-                                ? 'bg-primary border-primary'
-                                : isInCartFav
-                                  ? 'border-border bg-background'
-                                  : 'border-muted-foreground/20 bg-muted/30',
+                              'flex-1 text-sm',
+                              isCheckedFav && 'line-through text-muted-foreground',
+                              !isInCartFav && 'text-muted-foreground',
                             )}
                           >
-                            {isCheckedFav && (
-                              <Check className="text-primary-foreground" size={12} />
+                            {fav.name}
+                          </Text>
+
+                          {/* Quantità */}
+                          <Text className="text-xs text-muted-foreground mr-2">{fav.defaultQty}</Text>
+
+                          {/* Toggle in/out cart */}
+                          <Button
+                            size="icon"
+                            variant={isInCartFav ? 'default' : 'outline'}
+                            onPress={() =>
+                              toggleFavCart.mutate({
+                                weekKey,
+                                data: { favId: fav.favId, inCart: !isInCartFav },
+                              })
+                            }
+                            className="w-7 h-7 rounded-full"
+                          >
+                            {isInCartFav ? (
+                              <X className="text-primary-foreground" size={12} />
+                            ) : (
+                              <Plus className="text-foreground" size={12} />
                             )}
-                          </View>
-                        </Pressable>
-
-                        {/* Nome */}
-                        <Text
-                          className={cn(
-                            'flex-1 text-sm',
-                            isCheckedFav && 'line-through text-muted-foreground',
-                            !isInCartFav && 'text-muted-foreground',
-                          )}
-                        >
-                          {fav.name}
-                        </Text>
-
-                        {/* Quantità */}
-                        <Text className="text-xs text-muted-foreground mr-2">{fav.defaultQty}</Text>
-
-                        {/* Toggle in/out cart */}
-                        <Button
-                          size="icon"
-                          variant={isInCartFav ? 'default' : 'outline'}
-                          onPress={() =>
-                            toggleFavCart.mutate({
-                              weekKey,
-                              data: { favId: fav.favId, inCart: !isInCartFav },
-                            })
-                          }
-                          className="w-7 h-7 rounded-full"
-                        >
-                          {isInCartFav ? (
-                            <X className="text-primary-foreground" size={12} />
-                          ) : (
-                            <Plus className="text-foreground" size={12} />
-                          )}
-                        </Button>
-                      </View>
+                          </Button>
+                        </View>
+                      </Swipeable>
                       {idx < allFavorites.length - 1 && <Separator className="ml-12" />}
                     </View>
                   );

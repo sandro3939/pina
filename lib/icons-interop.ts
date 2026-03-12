@@ -54,6 +54,7 @@ import {
   Receipt,
   CalendarPlus,
   Image,
+  LogOut,
 } from 'lucide-react-native';
 
 const interopConfig = {
@@ -115,6 +116,7 @@ const icons = [
   Receipt,
   CalendarPlus,
   Image,
+  LogOut,
 ];
 
 for (const icon of icons) {

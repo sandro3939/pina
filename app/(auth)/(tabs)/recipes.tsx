@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, Pressable, Modal, ActivityIndicator, Animated } from 'react-native';
+import { View, ScrollView, Pressable, Modal, ActivityIndicator, Animated, RefreshControl } from 'react-native';
 import { useScreenEntrance } from '@/lib/hooks/useScreenEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
@@ -25,10 +25,16 @@ interface AddOption {
 
 export default function RecipesScreen() {
   const router = useRouter();
-  const { data: recipes = [], isLoading } = useRecipesControllerFindAll();
+  const { data: recipes = [], isLoading, refetch } = useRecipesControllerFindAll();
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState('tutti');
   const entrance = useScreenEntrance();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
+  };
   const [addModalVisible, setAddModalVisible] = useState(false);
 
   const filtered = recipes.filter((r) => {
@@ -108,9 +114,9 @@ export default function RecipesScreen() {
               variant={activeTag === tag ? 'default' : 'outline'}
               size="sm"
               onPress={() => setActiveTag(tag)}
-              className="rounded-full"
+              className="rounded-full h-8 px-3"
             >
-              <Text className="capitalize">{tag}</Text>
+              <Text className="capitalize text-sm">{tag}</Text>
             </Button>
           ))}
         </ScrollView>
@@ -126,6 +132,7 @@ export default function RecipesScreen() {
         <ScrollView
           className="flex-1"
           contentContainerClassName="px-4 pt-3 pb-6 gap-3"
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
           showsVerticalScrollIndicator={false}
         >
           {filtered.length === 0 ? (

@@ -22,6 +22,7 @@ apiClient.interceptors.request.use(async (config) => {
     // Dev fallback: nessun token Cognito disponibile, usa x-family-id
     config.headers['x-family-id'] = process.env.EXPO_PUBLIC_DEV_FAMILY_ID ?? 'dev-family';
   }
+  console.log(`[API] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`, config.data ?? '');
   return config;
 });
 

@@ -1,35 +1,22 @@
 import { useState } from 'react';
-import { View, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { getISOWeek, getISOWeekYear } from 'date-fns';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { ScanAnimation } from '@/components/ui/scan-animation';
 import { ArrowLeft, Camera, Image, ScanLine, CheckCircle2 } from 'lucide-react-native';
 import {
   receiptControllerGetUploadUrl,
   useReceiptControllerProcess,
 } from '@/lib/api/endpoints/receipt/receipt';
-import type { ProcessReceiptResponseDto } from '@/lib/api/model/receiptDto';
+import type { ProcessReceiptResponseDto } from '@/lib/api/model/processReceiptResponseDto';
 import { useQueryClient } from '@tanstack/react-query';
 import { getPantryControllerGetAllQueryKey } from '@/lib/api/endpoints/pantry/pantry';
-import { getShoppingControllerGetQueryKey } from '@/lib/api/endpoints/shopping/shopping';
-
-function getCurrentWeekKey(): string {
-  const today = new Date();
-  const day = today.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + diff);
-  monday.setHours(0, 0, 0, 0);
-  const year = getISOWeekYear(monday);
-  const week = getISOWeek(monday);
-  return `${year}-W${String(week).padStart(2, '0')}`;
-}
 
 type ScreenState = 'camera' | 'loading' | 'success' | 'error';
 
@@ -43,8 +30,6 @@ const LOADING_STEPS = [
 export default function ReceiptScanScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const weekKey = getCurrentWeekKey();
-
   const [state, setState] = useState<ScreenState>('camera');
   const [loadingStep, setLoadingStep] = useState(0);
   const [result, setResult] = useState<ProcessReceiptResponseDto | null>(null);
@@ -55,13 +40,13 @@ export default function ReceiptScanScreen() {
       onSuccess: (data) => {
         // Invalidate pantry and shopping caches
         queryClient.invalidateQueries({ queryKey: getPantryControllerGetAllQueryKey() });
-        queryClient.invalidateQueries({ queryKey: getShoppingControllerGetQueryKey(weekKey) });
         setResult(data);
         setState('success');
       },
       onError: (err: any) => {
+        console.log('[Receipt] process error:', JSON.stringify(err?.response?.data ?? err?.message ?? err));
         const msg = err?.response?.data?.message || err?.message || 'Errore durante l\'elaborazione';
-        setErrorMsg(typeof msg === 'string' ? msg : 'Errore sconosciuto');
+        setErrorMsg(typeof msg === 'string' ? msg : JSON.stringify(msg));
         setState('error');
       },
     },
@@ -114,7 +99,7 @@ export default function ReceiptScanScreen() {
         setLoadingStep(3);
 
         // 4. Process receipt
-        processReceipt.mutate({ s3Key, weekKey, mimeType });
+        processReceipt.mutate({ data: { s3Key, mimeType } });
       } catch (err) {
         clearInterval(stepTimer);
         throw err;
@@ -127,7 +112,7 @@ export default function ReceiptScanScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-background">
 
       {/* ── Camera / Pick state ────────────────────────────────── */}
       {state === 'camera' && (
@@ -177,9 +162,7 @@ export default function ReceiptScanScreen() {
       {/* ── Loading state ─────────────────────────────────────── */}
       {state === 'loading' && (
         <View className="flex-1 items-center justify-center px-8 gap-8">
-          <View className="w-24 h-24 rounded-3xl bg-primary/10 items-center justify-center">
-            <ActivityIndicator size="large" color="hsl(152, 52%, 35%)" />
-          </View>
+          <ScanAnimation Icon={ScanLine} />
 
           <View className="items-center gap-3 w-full">
             <Text className="text-base font-semibold">{LOADING_STEPS[loadingStep]}</Text>
@@ -198,54 +181,64 @@ export default function ReceiptScanScreen() {
       {/* ── Success state ─────────────────────────────────────── */}
       {state === 'success' && result && (
         <View className="flex-1">
-          <View className="flex-row items-center px-4 pt-4 pb-3">
-            <View className="w-10 h-10 rounded-full bg-primary/15 items-center justify-center mr-3">
-              <CheckCircle2 className="text-primary" size={22} />
+          {/* Banner header */}
+          <View className="mx-4 mt-4 mb-3 bg-primary/10 rounded-2xl border border-primary/20 px-4 py-4 gap-3">
+            <View className="flex-row items-center gap-3">
+              <View className="w-9 h-9 rounded-full bg-primary/20 items-center justify-center">
+                <CheckCircle2 className="text-primary" size={20} />
+              </View>
+              <View className="flex-1">
+                <Text className="font-semibold text-primary">Scontrino elaborato!</Text>
+                <Text className="text-xs text-muted-foreground">
+                  {result.items.length} articoli riconosciuti
+                  {result.addedToPantry > 0 ? ` · ${result.addedToPantry} nuovi in dispensa` : ''}
+                </Text>
+              </View>
             </View>
-            <View>
-              <Text variant="h3">Scontrino elaborato!</Text>
-              <Text variant="muted">{result.items.length} articoli riconosciuti</Text>
-            </View>
+
+            {(result.newItems ?? []).length > 0 && (
+              <View className="gap-1">
+                {(result.newItems ?? []).map((item, idx) => (
+                  <View key={idx} className="flex-row items-center gap-2">
+                    <View className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+                    <Text className="text-sm text-primary/90 flex-1">{item.name}</Text>
+                    {item.quantity ? (
+                      <Text className="text-xs text-muted-foreground">{item.quantity}</Text>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
 
           <Separator />
 
           <ScrollView contentContainerClassName="px-4 py-4 gap-4" showsVerticalScrollIndicator={false}>
-            {/* Stats */}
-            <View className="flex-row gap-3">
-              <View className="flex-1 bg-primary/10 rounded-xl p-4 items-center gap-1 border border-primary/20">
-                <Text className="text-2xl font-bold text-primary">{result.addedToPantry}</Text>
-                <Text className="text-xs text-muted-foreground text-center">aggiunti in dispensa</Text>
-              </View>
-              {result.addedToShopping !== undefined && (
-                <View className="flex-1 bg-muted rounded-xl p-4 items-center gap-1">
-                  <Text className="text-2xl font-bold">{result.addedToShopping}</Text>
-                  <Text className="text-xs text-muted-foreground text-center">aggiunti alla spesa</Text>
-                </View>
-              )}
-            </View>
 
-            {/* Items list */}
+            {/* Tutti gli articoli riconosciuti */}
             {result.items.length > 0 && (
               <View>
                 <Text className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1 mb-2">
-                  Articoli trovati
+                  Tutti gli articoli
                 </Text>
                 <Card>
                   <CardContent className="pt-3 pb-1">
-                    {result.items.map((item, idx) => (
-                      <View key={idx}>
-                        <View className="flex-row items-center justify-between py-3">
-                          <Text className="flex-1 text-sm">{item.name}</Text>
-                          {item.quantity ? (
-                            <Badge variant="secondary">
-                              <Text className="text-[10px]">{item.quantity}</Text>
-                            </Badge>
-                          ) : null}
+                    {result.items.map((item, idx) => {
+                      const isNew = result.newItems.some((n) => n.name === item.name);
+                      return (
+                        <View key={idx}>
+                          <View className="flex-row items-center justify-between py-3">
+                            <Text className={`flex-1 text-sm${isNew ? '' : ' text-muted-foreground'}`}>{item.name}</Text>
+                            {item.quantity ? (
+                              <Badge variant="secondary">
+                                <Text className="text-[10px]">{item.quantity}</Text>
+                              </Badge>
+                            ) : null}
+                          </View>
+                          {idx < result.items.length - 1 && <Separator />}
                         </View>
-                        {idx < result.items.length - 1 && <Separator />}
-                      </View>
-                    ))}
+                      );
+                    })}
                   </CardContent>
                 </Card>
               </View>

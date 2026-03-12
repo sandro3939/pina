@@ -38,14 +38,14 @@ export const shoppingControllerGet = (
   signal?: AbortSignal,
 ) => {
   return customInstance<ShoppingResponseDto>({
-    url: `/shopping/${weekKey}`,
+    url: `/pina/shopping/${weekKey}`,
     method: "GET",
     signal,
   });
 };
 
 export const getShoppingControllerGetQueryKey = (weekKey?: string) => {
-  return [`/shopping/${weekKey}`] as const;
+  return [`/pina/shopping/${weekKey}`] as const;
 };
 
 export const getShoppingControllerGetQueryOptions = <
@@ -201,7 +201,7 @@ export const shoppingControllerGenerate = (
   signal?: AbortSignal,
 ) => {
   return customInstance<ShoppingResponseDto>({
-    url: `/shopping/${weekKey}/generate`,
+    url: `/pina/shopping/${weekKey}/generate`,
     method: "POST",
     signal,
   });
@@ -284,7 +284,7 @@ export const shoppingControllerToggleItem = (
   toggleItemDto: ToggleItemDto,
 ) => {
   return customInstance<ShoppingResponseDto>({
-    url: `/shopping/${weekKey}/toggle-item`,
+    url: `/pina/shopping/${weekKey}/toggle-item`,
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     data: toggleItemDto,
@@ -369,7 +369,7 @@ export const shoppingControllerReset = (
   signal?: AbortSignal,
 ) => {
   return customInstance<ShoppingResponseDto>({
-    url: `/shopping/${weekKey}/reset`,
+    url: `/pina/shopping/${weekKey}/reset`,
     method: "POST",
     signal,
   });
@@ -453,7 +453,7 @@ export const shoppingControllerBulkCheck = (
   signal?: AbortSignal,
 ) => {
   return customInstance<ShoppingResponseDto>({
-    url: `/shopping/${weekKey}/bulk-check`,
+    url: `/pina/shopping/${weekKey}/bulk-check`,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     data: bulkCheckDto,
@@ -539,7 +539,7 @@ export const shoppingControllerToggleFavCart = (
   toggleFavCartDto: ToggleFavCartDto,
 ) => {
   return customInstance<ShoppingResponseDto>({
-    url: `/shopping/${weekKey}/toggle-fav-cart`,
+    url: `/pina/shopping/${weekKey}/toggle-fav-cart`,
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     data: toggleFavCartDto,
@@ -624,7 +624,7 @@ export const shoppingControllerToggleFavChecked = (
   toggleFavCheckedDto: ToggleFavCheckedDto,
 ) => {
   return customInstance<ShoppingResponseDto>({
-    url: `/shopping/${weekKey}/toggle-fav-checked`,
+    url: `/pina/shopping/${weekKey}/toggle-fav-checked`,
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     data: toggleFavCheckedDto,

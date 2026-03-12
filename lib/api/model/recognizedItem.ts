@@ -5,8 +5,7 @@
  * OpenAPI spec version: 1.0
  */
 
-export interface CreatePantryItemDto {
+export interface RecognizedItem {
   name: string;
-  category?: string;
-  inStock?: boolean;
+  quantity?: string;
 }

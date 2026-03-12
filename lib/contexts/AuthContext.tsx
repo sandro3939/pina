@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { cognitoService, ForceChangePasswordError } from '@/lib/services/cognito';
+
+export { ForceChangePasswordError };
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -13,31 +16,49 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [cognitoSub, setCognitoSub] = useState<string | null>(null);
+
+  // Restore session on app start
+  useEffect(() => {
+    (async () => {
+      try {
+        const session = await cognitoService.getSession();
+        if (session) {
+          const user = await cognitoService.getCurrentUser();
+          setCognitoSub(user?.userId ?? null);
+          setIsAuthenticated(true);
+        }
+      } catch {
+        // No valid session
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, []);
 
   const signIn = async (email: string, password: string) => {
-    // Static login — accetta qualsiasi credenziale
-    await new Promise((r) => setTimeout(r, 400));
+    const session = await cognitoService.signIn(email, password);
+    const user = await cognitoService.getCurrentUser();
+    setCognitoSub(user?.userId ?? null);
     setIsAuthenticated(true);
   };
 
-  const completeNewPassword = async (_newPassword: string) => {};
+  const completeNewPassword = async (newPassword: string) => {
+    await cognitoService.completeNewPassword(newPassword);
+    const user = await cognitoService.getCurrentUser();
+    setCognitoSub(user?.userId ?? null);
+    setIsAuthenticated(true);
+  };
 
   const signOut = async () => {
+    await cognitoService.signOut();
+    setCognitoSub(null);
     setIsAuthenticated(false);
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        isAuthenticated,
-        isLoading,
-        cognitoSub: isAuthenticated ? 'static-user-id' : null,
-        signIn,
-        completeNewPassword,
-        signOut,
-      }}
-    >
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, cognitoSub, signIn, completeNewPassword, signOut }}>
       {children}
     </AuthContext.Provider>
   );
@@ -48,5 +69,3 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }
-
-export class ForceChangePasswordError extends Error {}

@@ -1,16 +1,28 @@
 import { useState } from 'react';
-import { View, ScrollView, ActivityIndicator, Modal, Animated, Pressable } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Modal, Animated, Pressable, RefreshControl } from 'react-native';
 import { useScreenEntrance } from '@/lib/hooks/useScreenEntrance';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
-import { Search, Camera, Plus, X, Trash2 } from 'lucide-react-native';
+import { Search, Camera, Plus, X, Trash2, LogOut } from 'lucide-react-native';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   usePantryControllerGetAll,
@@ -23,13 +35,26 @@ import {
 export default function PantryScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { signOut } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
+    router.replace('/(public)/login');
+  };
   const entrance = useScreenEntrance();
   const [search, setSearch] = useState('');
   const [addModal, setAddModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [addError, setAddError] = useState('');
 
-  const { data: items = [], isLoading } = usePantryControllerGetAll();
+  const { data: items = [], isLoading, refetch } = usePantryControllerGetAll();
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
+  };
 
   const toggleStock = usePantryControllerToggleStock({
     mutation: {
@@ -161,6 +186,29 @@ export default function PantryScreen() {
           </Text>
         </View>
         <View className="flex-row gap-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="icon" variant="ghost">
+                <LogOut className="text-muted-foreground" size={18} />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Esci dall'account</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Vuoi uscire dall'account?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel asChild>
+                  <Button variant="outline"><Text>Annulla</Text></Button>
+                </AlertDialogCancel>
+                <AlertDialogAction asChild>
+                  <Button variant="destructive" onPress={handleLogout}><Text>Esci</Text></Button>
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Button size="icon" variant="outline" onPress={() => router.push('/(auth)/receipt-scan')}>
             <Camera className="text-foreground" size={20} />
           </Button>
@@ -185,7 +233,7 @@ export default function PantryScreen() {
 
       <Separator />
 
-      <ScrollView contentContainerClassName="pb-6" showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerClassName="pb-6" showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}>
         {items.length === 0 ? (
           <View className="items-center py-16 gap-3">
             <Text variant="muted">Nessun articolo in dispensa</Text>

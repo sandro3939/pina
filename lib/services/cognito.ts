@@ -32,6 +32,9 @@ Amplify.configure({
     Cognito: {
       userPoolId: cognitoConfig.userPoolId,
       userPoolClientId: cognitoConfig.clientId,
+      loginWith: {
+        email: true,
+      },
     },
   },
 });
@@ -44,7 +47,7 @@ class CognitoAmplifyService {
     try {
       try { await amplifySignOut(); } catch { /* ignore stale state */ }
 
-      const result = await amplifySignIn({ username: email, password });
+      const result = await amplifySignIn({ username: email, password, options: { authFlowType: 'USER_PASSWORD_AUTH' } });
 
       if (!result.isSignedIn &&
           result.nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
@@ -58,6 +61,7 @@ class CognitoAmplifyService {
       if (error instanceof ForceChangePasswordError) throw error;
 
       const e = error as { name?: string; message?: string };
+      console.log('[Cognito] signIn error:', e.name, e.message);
       if (e.name === 'NotAuthorizedException') throw new Error('Email o password non corretti.');
       if (e.name === 'UserNotFoundException') throw new Error('Utente non trovato.');
       if (e.name === 'UserNotConfirmedException') throw new Error('Account non verificato. Controlla la tua email.');

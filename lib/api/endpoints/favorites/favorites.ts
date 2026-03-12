@@ -29,14 +29,14 @@ import { customInstance } from "../../axios-instance";
  */
 export const favoritesControllerGetAll = (signal?: AbortSignal) => {
   return customInstance<FavoriteResponseDto[]>({
-    url: `/favorites`,
+    url: `/pina/favorites`,
     method: "GET",
     signal,
   });
 };
 
 export const getFavoritesControllerGetAllQueryKey = () => {
-  return [`/favorites`] as const;
+  return [`/pina/favorites`] as const;
 };
 
 export const getFavoritesControllerGetAllQueryOptions = <
@@ -180,7 +180,7 @@ export const favoritesControllerCreate = (
   signal?: AbortSignal,
 ) => {
   return customInstance<FavoriteResponseDto>({
-    url: `/favorites`,
+    url: `/pina/favorites`,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     data: createFavoriteDto,
@@ -261,7 +261,10 @@ export const useFavoritesControllerCreate = <
  * @summary Rimuovi articolo preferito
  */
 export const favoritesControllerRemove = (favId: string) => {
-  return customInstance<void>({ url: `/favorites/${favId}`, method: "DELETE" });
+  return customInstance<void>({
+    url: `/pina/favorites/${favId}`,
+    method: "DELETE",
+  });
 };
 
 export const getFavoritesControllerRemoveMutationOptions = <

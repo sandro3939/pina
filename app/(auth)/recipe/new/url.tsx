@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, Globe, Clock, Users, CheckCircle2, RotateCcw, AlertCircle } from 'lucide-react-native';
+import { ScanAnimation } from '@/components/ui/scan-animation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRecipesControllerImportFromUrl } from '@/lib/api/endpoints/recipes/recipes';
 import {
@@ -59,7 +60,7 @@ export default function UrlRecipeScreen() {
     }
     setUrlError('');
     setState('loading');
-    importMutation.mutate({ url: url.trim() });
+    importMutation.mutate({ data: { url: url.trim() } });
   };
 
   const handleReset = () => {
@@ -86,7 +87,7 @@ export default function UrlRecipeScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView edges={['top', 'left', 'right']} className="flex-1 bg-background">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
@@ -155,10 +156,8 @@ export default function UrlRecipeScreen() {
 
         {/* Loading state */}
         {state === 'loading' && (
-          <View className="flex-1 items-center justify-center gap-5 px-8">
-            <View className="w-20 h-20 rounded-2xl bg-primary/10 items-center justify-center">
-              <ActivityIndicator size="large" color="hsl(142, 76%, 36%)" />
-            </View>
+          <View className="flex-1 items-center justify-center gap-8 px-8">
+            <ScanAnimation Icon={Globe} />
             <View className="items-center gap-2">
               <Text className="text-base font-semibold">Estrazione in corso...</Text>
               <Text className="text-sm text-muted-foreground text-center">

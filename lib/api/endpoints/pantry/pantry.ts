@@ -33,14 +33,14 @@ import { customInstance } from "../../axios-instance";
  */
 export const pantryControllerGetAll = (signal?: AbortSignal) => {
   return customInstance<PantryItemResponseDto[]>({
-    url: `/pantry`,
+    url: `/pina/pantry`,
     method: "GET",
     signal,
   });
 };
 
 export const getPantryControllerGetAllQueryKey = () => {
-  return [`/pantry`] as const;
+  return [`/pina/pantry`] as const;
 };
 
 export const getPantryControllerGetAllQueryOptions = <
@@ -184,7 +184,7 @@ export const pantryControllerCreate = (
   signal?: AbortSignal,
 ) => {
   return customInstance<PantryItemResponseDto>({
-    url: `/pantry`,
+    url: `/pina/pantry`,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     data: createPantryItemDto,
@@ -266,7 +266,7 @@ export const pantryControllerToggleStock = (
   toggleStockDto: ToggleStockDto,
 ) => {
   return customInstance<PantryItemResponseDto>({
-    url: `/pantry/${itemId}/toggle-stock`,
+    url: `/pina/pantry/${itemId}/toggle-stock`,
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     data: toggleStockDto,
@@ -347,7 +347,10 @@ export const usePantryControllerToggleStock = <
  * @summary Rimuovi articolo dalla dispensa
  */
 export const pantryControllerRemove = (itemId: string) => {
-  return customInstance<void>({ url: `/pantry/${itemId}`, method: "DELETE" });
+  return customInstance<void>({
+    url: `/pina/pantry/${itemId}`,
+    method: "DELETE",
+  });
 };
 
 export const getPantryControllerRemoveMutationOptions = <
