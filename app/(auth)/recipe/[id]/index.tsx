@@ -196,8 +196,16 @@ export default function RecipeDetailScreen() {
             <ArrowLeft className="text-foreground" size={20} />
           </Button>
 
-          {/* Edit + Delete buttons */}
+          {/* Edit + Delete + Planner buttons */}
           <View className="absolute top-4 right-4 flex-row gap-2">
+            <Button
+              size="icon"
+              variant="outline"
+              className="bg-background/80"
+              onPress={() => setPlannerOpen(true)}
+            >
+              <CalendarPlus className="text-primary" size={16} />
+            </Button>
             <Button
               size="icon"
               variant="outline"
