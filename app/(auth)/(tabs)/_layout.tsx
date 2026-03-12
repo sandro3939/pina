@@ -83,7 +83,7 @@ function CustomTabBar({ state, navigation }: TabBarProps) {
       style={{ paddingTop: 6, paddingBottom: insets.bottom || 12, paddingHorizontal: 16 }}
     >
       <View
-        className="flex-row bg-card rounded-3xl"
+        className="flex-row bg-card rounded-3xl border border-border"
         style={{
           shadowColor: theme.primary,
           shadowOffset: { width: 0, height: 4 },

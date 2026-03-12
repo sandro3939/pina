@@ -10,6 +10,8 @@ import { Separator } from '@/components/ui/separator';
 import { Plus, ChevronLeft, ChevronRight, Utensils, X, Search, Clock, Users } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { cn } from '@/lib/utils';
+import { useColorScheme } from 'nativewind';
+import { THEME } from '@/lib/theme';
 import { getISOWeek, getISOWeekYear } from 'date-fns';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -101,6 +103,8 @@ export default function PlannerScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [weekOffset, setWeekOffset] = useState(0);
+  const { colorScheme } = useColorScheme();
+  const theme = THEME[colorScheme ?? 'light'];
 
   const entrance = useScreenEntrance();
   const [pickerSlot, setPickerSlot] = useState<PickerSlot | null>(null);
@@ -213,12 +217,21 @@ export default function PlannerScreen() {
             </Button>
           </View>
 
-          {/* Week navigator pill */}
-          <View className="flex-row items-center bg-muted rounded-xl">
-            <Button size="icon" variant="ghost" onPress={() => setWeekOffset((o) => o - 1)}>
+          {/* Week navigator */}
+          <View
+            className="flex-row items-center bg-card rounded-2xl border border-border"
+            style={{
+              shadowColor: theme.primary,
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: colorScheme === 'dark' ? 0.15 : 0.08,
+              shadowRadius: 8,
+              elevation: 4,
+            }}
+          >
+            <Button size="icon" variant="outline" onPress={() => setWeekOffset((o) => o - 1)} className="m-1.5">
               <ChevronLeft className="text-foreground" size={18} />
             </Button>
-            <View className="flex-1 items-center py-2">
+            <View className="flex-1 items-center py-2.5">
               <Text className="text-sm font-bold">{weekLabel}</Text>
               <Text className="text-[10px] text-muted-foreground mt-0.5">
                 {weekOffset === 0
@@ -232,7 +245,7 @@ export default function PlannerScreen() {
                   : `${weekOffset} settimane`}
               </Text>
             </View>
-            <Button size="icon" variant="ghost" onPress={() => setWeekOffset((o) => o + 1)}>
+            <Button size="icon" variant="outline" onPress={() => setWeekOffset((o) => o + 1)} className="m-1.5">
               <ChevronRight className="text-foreground" size={18} />
             </Button>
           </View>
